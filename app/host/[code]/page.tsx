@@ -27,9 +27,16 @@ export default function HostPanelPage() {
     return null;
   });
 
-
   const [invites, setInvites] = useState<Invite[]>([]);
   const [inviteCount, setInviteCount] = useState(1);
+
+  // ---- Voting setup state (NEW) ----
+  const [setupKeys, setSetupKeys] = useState<string[]>([
+    "best_picture",
+    "best_actor",
+    "best_actress",
+  ]);
+  const [setupMsg, setSetupMsg] = useState<string | null>(null);
 
   async function loadInvites() {
     const res = await fetch(`/api/groups/${code}/invites`);
@@ -46,22 +53,45 @@ export default function HostPanelPage() {
     await loadInvites();
   }
 
+  // ---- Apply setup (NEW) ----
+  async function applySetup() {
+    if (!adminToken) {
+      alert("Missing admin token");
+      return;
+    }
+    setSetupMsg(null);
+
+    const res = await fetch(`/api/groups/${code}/setup?k=${adminToken}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryKeys: setupKeys }),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      setSetupMsg(json?.error ?? "Failed to setup voting");
+      return;
+    }
+
+    setSetupMsg("Voting setup applied ✅");
+  }
+
+  // load invites on mount/when code changes (lint-friendly pattern you already use)
   useEffect(() => {
-  if (!code) return;
+    if (!code) return;
 
-  let cancelled = false;
+    let cancelled = false;
 
-  (async () => {
-    const res = await fetch(`/api/groups/${code}/invites`);
-    const data = await res.json();
-    if (!cancelled) setInvites(data);
-  })();
+    (async () => {
+      const res = await fetch(`/api/groups/${code}/invites`);
+      const data = await res.json();
+      if (!cancelled) setInvites(data);
+    })();
 
-  return () => {
-    cancelled = true;
-  };
-}, [code]);
-
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
 
   function copyLink(token: string) {
     const link = `${window.location.origin}/g/${code}?t=${token}`;
@@ -76,7 +106,7 @@ export default function HostPanelPage() {
     alert("Admin link copied");
   }
 
-
+  // persist admin token + optionally reflect it in the URL
   useEffect(() => {
     if (!code || !storageKey) return;
     if (!adminToken) return;
@@ -85,12 +115,9 @@ export default function HostPanelPage() {
 
     // si la URL no tiene k, la actualizamos (solo cosmetico)
     if (!urlToken) {
-        window.history.replaceState(null, "", `/host/${code}?k=${adminToken}`);
+      window.history.replaceState(null, "", `/host/${code}?k=${adminToken}`);
     }
   }, [code, storageKey, adminToken, urlToken]);
-
-
-
 
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100 p-6">
@@ -98,16 +125,78 @@ export default function HostPanelPage() {
         <h1 className="text-3xl font-semibold tracking-tight">Host panel</h1>
 
         <div className="rounded-xl border border-neutral-800 p-4 space-y-2">
-          <div>Group code: <span className="font-mono">{code}</span></div>
+          <div>
+            Group code: <span className="font-mono">{code}</span>
+          </div>
           <div>Admin token present? {adminToken ? "YES" : "NO"}</div>
-            {adminToken && (
-                <button
-                    onClick={copyAdminLink}
-                    className="inline-flex items-center justify-center rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
-                >
-                    Copy admin link
-                </button>
-                )}
+
+          {adminToken && (
+            <button
+              onClick={copyAdminLink}
+              className="inline-flex items-center justify-center rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+            >
+              Copy admin link
+            </button>
+          )}
+        </div>
+
+        {/* Voting setup (NEW) */}
+        <div className="rounded-xl border border-neutral-800 p-4 space-y-3">
+          <div className="font-medium">Voting setup</div>
+
+          <label className="flex items-center gap-2 text-sm text-neutral-300">
+            <input
+              type="checkbox"
+              checked={setupKeys.includes("best_picture")}
+              onChange={(e) =>
+                setSetupKeys((prev) =>
+                  e.target.checked
+                    ? [...prev, "best_picture"]
+                    : prev.filter((k) => k !== "best_picture")
+                )
+              }
+            />
+            Best Picture
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-neutral-300">
+            <input
+              type="checkbox"
+              checked={setupKeys.includes("best_actor")}
+              onChange={(e) =>
+                setSetupKeys((prev) =>
+                  e.target.checked
+                    ? [...prev, "best_actor"]
+                    : prev.filter((k) => k !== "best_actor")
+                )
+              }
+            />
+            Best Actor
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-neutral-300">
+            <input
+              type="checkbox"
+              checked={setupKeys.includes("best_actress")}
+              onChange={(e) =>
+                setSetupKeys((prev) =>
+                  e.target.checked
+                    ? [...prev, "best_actress"]
+                    : prev.filter((k) => k !== "best_actress")
+                )
+              }
+            />
+            Best Actress
+          </label>
+
+          {setupMsg && <div className="text-sm text-neutral-300">{setupMsg}</div>}
+
+          <button
+            onClick={applySetup}
+            className="inline-flex items-center justify-center rounded-md bg-yellow-500 px-3 py-2 text-sm font-medium text-black hover:bg-yellow-400"
+          >
+            Apply setup
+          </button>
         </div>
 
         <div className="rounded-xl border border-neutral-800 p-4 space-y-3">
