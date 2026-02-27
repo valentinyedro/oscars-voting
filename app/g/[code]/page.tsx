@@ -141,10 +141,29 @@ export default function GroupVotePage() {
   if (data.alreadyVoted) {
     return (
       <main className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center p-6">
-        <div className="max-w-lg space-y-3">
+        <div className="max-w-lg space-y-3 text-center">
           <h1 className="text-2xl font-semibold">{data.group.title}</h1>
+
           <p className="text-neutral-300">You already voted. 🎬</p>
-          <p className="text-neutral-400 text-sm">Wait for results or the host reveal.</p>
+
+          {data.group.revealAt ? (
+            <>
+              <p className="text-neutral-400 text-sm">
+                Results have been revealed.
+              </p>
+
+              <a
+                href={`/r/${data.group.code}`}
+                className="inline-flex items-center justify-center rounded-md bg-yellow-500 px-4 py-2 text-sm font-medium text-black hover:bg-yellow-400"
+              >
+                View results
+              </a>
+            </>
+          ) : (
+            <p className="text-neutral-400 text-sm">
+              Wait for results or the host reveal.
+            </p>
+          )}
         </div>
       </main>
     );
