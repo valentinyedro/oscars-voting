@@ -110,6 +110,13 @@ export async function POST(
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
+    if (group.reveal_at) {
+    return NextResponse.json(
+        { error: "Voting is closed (results have been revealed)" },
+        { status: 403 }
+    );
+    }
+
     // invite
     const { data: invite, error: inviteError } = await supabaseServer
       .from("invites")
