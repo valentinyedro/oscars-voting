@@ -1,0 +1,295 @@
+[
+  {
+    "key": "best-picture",
+    "name": "Best Picture",
+    "sort_order": 1,
+    "nominees": [
+      "Bugonia",
+      "F1",
+      "Frankenstein",
+      "Hamnet",
+      "Marty Supreme",
+      "One Battle After Another",
+      "The Secret Agent",
+      "Sentimental Value",
+      "Sinners",
+      "Train Dreams"
+    ]
+  },
+  {
+    "key": "actor-leading",
+    "name": "Actor in a Leading Role",
+    "sort_order": 2,
+    "nominees": [
+      "Timothée Chalamet—Marty Supreme",
+      "Leonardo DiCaprio—One Battle After Another",
+      "Ethan Hawke—Blue Moon",
+      "Michael B. Jordan—Sinners",
+      "Wagner Moura—The Secret Agent"
+    ]
+  },
+  {
+    "key": "actor-supporting",
+    "name": "Actor in a Supporting Role",
+    "sort_order": 3,
+    "nominees": [
+      "Benicio Del Toro—One Battle After Another",
+      "Jacob Elordi—Frankenstein",
+      "Delroy Lindo—Sinners",
+      "Sean Penn—One Battle After Another",
+      "Stellan Skarsgård—Sentimental Value"
+    ]
+  },
+  {
+    "key": "actress-leading",
+    "name": "Actress in a Leading Role",
+    "sort_order": 4,
+    "nominees": [
+      "Jessie Buckley—Hamnet",
+      "Rose Byrne—If I Had Legs I’d Kick You",
+      "Kate Hudson—Song Sung Blue",
+      "Renate Reinsve—Sentimental Value",
+      "Emma Stone—Bugonia"
+    ]
+  },
+  {
+    "key": "actress-supporting",
+    "name": "Actress in a Supporting Role",
+    "sort_order": 5,
+    "nominees": [
+      "Elle Fanning—Sentimental Value",
+      "Inga Ibsdotter Lilleaas—Sentimental Value",
+      "Amy Madigan—Weapons",
+      "Wunmi Mosaku—Sinners",
+      "Teyana Taylor—One Battle After Another"
+    ]
+  },
+  {
+    "key": "animated-feature",
+    "name": "Animated Feature Film",
+    "sort_order": 6,
+    "nominees": [
+      "Arco",
+      "Elio",
+      "KPop Demon Hunters",
+      "Little Amélie or the Character of Rain",
+      "Zootopia 2"
+    ]
+  },
+  {
+    "key": "animated-short",
+    "name": "Animated Short Film",
+    "sort_order": 7,
+    "nominees": [
+      "Butterfly",
+      "Forevergreen",
+      "The Girl Who Cried Pearls",
+      "Retirement Plan",
+      "The Three Sisters"
+    ]
+  },
+  {
+    "key": "documentary-feature",
+    "name": "Documentary Feature Film",
+    "sort_order": 8,
+    "nominees": [
+      "The Alabama Solution",
+      "Come See Me in the Good Light",
+      "Cutting Through Rocks",
+      "Mr. Nobody Against Putin",
+      "The Perfect Neighbor"
+    ]
+  },
+  {
+    "key": "documentary-short",
+    "name": "Documentary Short Film",
+    "sort_order": 9,
+    "nominees": [
+      "All the Empty Rooms",
+      "Armed Only with a Camera: The Life and…",
+      "Children No More: “Were and Are Gone”",
+      "The Devil Is Busy",
+      "Perfectly a Strangeness"
+    ]
+  },
+  {
+    "key": "international-feature",
+    "name": "International Feature Film",
+    "sort_order": 10,
+    "nominees": [
+      "The Secret Agent",
+      "It Was Just an Accident",
+      "Sentimental Value",
+      "Sirāt",
+      "The Voice of Hind Rajab"
+    ]
+  },
+  {
+    "key": "live-action-short",
+    "name": "Live Action Short Film",
+    "sort_order": 11,
+    "nominees": [
+      "Butcher’s Stain",
+      "A Friend of Dorothy",
+      "Jane Austen’s Period Drama",
+      "The Singers",
+      "Two People Exchanging Saliva"
+    ]
+  },
+  {
+    "key": "directing",
+    "name": "Directing",
+    "sort_order": 12,
+    "nominees": [
+      "Chloé Zhao—Hamnet",
+      "Josh Safdie—Marty Supreme",
+      "Paul Thomas Anderson—One Battle After Another",
+      "Joachim Trier—Sentimental Value",
+      "Ryan Coogler—Sinners"
+    ]
+  },
+  {
+    "key": "writing-adapted",
+    "name": "Writing (Adapted Screenplay)",
+    "sort_order": 13,
+    "nominees": [
+      "Bugonia",
+      "Frankenstein",
+      "Hamnet",
+      "One Battle After Another",
+      "Train Dreams"
+    ]
+  },
+  {
+    "key": "writing-original",
+    "name": "Writing (Original Screenplay)",
+    "sort_order": 14,
+    "nominees": [
+      "Blue Moon",
+      "It Was Just an Accident",
+      "Marty Supreme",
+      "Sentimental Value",
+      "Sinners"
+    ]
+  },
+  {
+    "key": "cinematography",
+    "name": "Cinematography",
+    "sort_order": 15,
+    "nominees": [
+      "Frankenstein",
+      "Marty Supreme",
+      "One Battle After Another",
+      "Sinners",
+      "Train Dreams"
+    ]
+  },
+  {
+    "key": "costume-design",
+    "name": "Costume Design",
+    "sort_order": 16,
+    "nominees": [
+      "Avatar: Fire and Ash",
+      "Frankenstein",
+      "Hamnet",
+      "Marty Supreme",
+      "Sinners"
+    ]
+  },
+  {
+    "key": "production-design",
+    "name": "Production Design",
+    "sort_order": 17,
+    "nominees": [
+      "Frankenstein",
+      "Hamnet",
+      "Marty Supreme",
+      "One Battle After Another",
+      "Sinners"
+    ]
+  },
+  {
+    "key": "makeup-hairstyling",
+    "name": "Makeup and Hairstyling",
+    "sort_order": 18,
+    "nominees": [
+      "Frankenstein",
+      "Kokuho",
+      "Sinners",
+      "The Smashing Machine",
+      "The Ugly Stepsister"
+    ]
+  },
+  {
+    "key": "film-editing",
+    "name": "Film Editing",
+    "sort_order": 19,
+    "nominees": [
+      "F1",
+      "Marty Supreme",
+      "One Battle After Another",
+      "Sentimental Value",
+      "Sinners"
+    ]
+  },
+  {
+    "key": "sound",
+    "name": "Sound",
+    "sort_order": 20,
+    "nominees": [
+      "F1",
+      "Frankenstein",
+      "One Battle After Another",
+      "Sinners",
+      "Sirāt"
+    ]
+  },
+  {
+    "key": "visual-effects",
+    "name": "Visual Effects",
+    "sort_order": 21,
+    "nominees": [
+      "Avatar: Fire and Ash",
+      "F1",
+      "Jurassic World Rebirth",
+      "The Lost Bus",
+      "Sinners"
+    ]
+  },
+  {
+    "key": "music-original-score",
+    "name": "Music (Original Score)",
+    "sort_order": 22,
+    "nominees": [
+      "Jerskin Fendrix—Bugonia",
+      "Alexandre Desplat—Frankenstein",
+      "Max Richter—Hamnet",
+      "Jonny Greenwood—One Battle After Another",
+      "Ludwig Göransson—Sinners"
+    ]
+  },
+  {
+    "key": "music-original-song",
+    "name": "Music (Original Song)",
+    "sort_order": 23,
+    "nominees": [
+      "Dear Me—Diane Warren: Relentless",
+      "Golden—KPop Demon Hunters",
+      "I Lied To You—Sinners",
+      "Sweet Dreams Of Joy—Viva Verdi!",
+      "Train Dreams—Train Dreams"
+    ]
+  },
+  {
+    "key": "casting",
+    "name": "Casting",
+    "sort_order": 24,
+    "nominees": [
+      "Hamnet",
+      "Marty Supreme",
+      "One Battle After Another",
+      "The Secret Agent",
+      "Sinners"
+    ]
+  }
+]

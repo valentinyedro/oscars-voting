@@ -12,6 +12,11 @@ export async function POST(
 ) {
   try {
     const { code: groupCode } = await ctx.params;
+    const url = new URL(req.url);
+    const adminToken = url.searchParams.get("k");
+    if (!adminToken) {
+      return NextResponse.json({ error: "Missing admin token" }, { status: 400 });
+    }
     const body = await req.json();
     const count = Number(body.count);
 
@@ -32,6 +37,18 @@ export async function POST(
 
     if (groupError || !group) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
+    }
+
+    // Auth: adminToken must be a host invite in this group
+    const { data: adminInvite, error: adminError } = await supabaseServer
+      .from("invites")
+      .select("id, role")
+      .eq("group_id", group.id)
+      .eq("token", adminToken)
+      .single();
+
+    if (adminError || !adminInvite || adminInvite.role !== "host") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // 2) Count existing invites
@@ -73,6 +90,11 @@ export async function GET(
 ) {
   try {
     const { code: groupCode } = await ctx.params;
+    const url = new URL(req.url);
+    const adminToken = url.searchParams.get("k");
+    if (!adminToken) {
+      return NextResponse.json({ error: "Missing admin token" }, { status: 400 });
+    }
 
     const { data: group, error: groupError } = await supabaseServer
       .from("groups")
@@ -84,11 +106,24 @@ export async function GET(
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
+    // Auth: adminToken must be a host invite in this group
+    const { data: adminInvite, error: adminError } = await supabaseServer
+      .from("invites")
+      .select("id, role")
+      .eq("group_id", group.id)
+      .eq("token", adminToken)
+      .single();
+
+    if (adminError || !adminInvite || adminInvite.role !== "host") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { data: invites, error } = await supabaseServer
       .from("invites")
-      .select("id, display_name, role, used_at, token")
+      .select("id, display_name, role, used_at, token, created_at")
       .eq("group_id", group.id)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
 
     if (error) throw error;
 

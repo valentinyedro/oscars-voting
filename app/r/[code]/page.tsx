@@ -7,6 +7,7 @@ import Link from "next/link";
 type ResultsResponse =
   | {
       group: { title: string; code: string; revealAt: string };
+      voters?: { displayName: string; voted: boolean }[];
       results: {
         categoryId: string;
         categoryName: string;
@@ -122,6 +123,22 @@ export default function PublicResultsPage() {
             Share
           </button>
         </div>
+
+        {data.voters && data.voters.length > 0 && (
+          <div className="rounded-xl border border-neutral-800 p-4">
+            <h3 className="text-sm font-medium">Voting members ({data.voters.length})</h3>
+            <div className="mt-2 flex flex-wrap gap-2 text-sm">
+              {data.voters.map((v, i) => (
+                <div
+                  key={`${v.displayName}-${i}`}
+                  className="rounded-full bg-neutral-900/40 px-3 py-1 text-neutral-300"
+                >
+                  {v.displayName}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {data.results.map((cat) => {
           const topVotes = Math.max(...cat.nominees.map((n) => n.votes));

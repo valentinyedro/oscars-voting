@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { OSCARS_CATALOG } from "@/lib//catalog";
 
 type Invite = {
   id: string;
@@ -53,12 +54,24 @@ export default function HostPanelPage() {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [inviteCount, setInviteCount] = useState(1);
 
+  // ---- Catalog-derived categories (stable order) ----
+  const catalogCategories = useMemo(() => {
+    return [...OSCARS_CATALOG].sort((a, b) => {
+      const ao = a.sort_order ?? 9999;
+      const bo = b.sort_order ?? 9999;
+      if (ao !== bo) return ao - bo;
+      return a.name.localeCompare(b.name);
+    });
+  }, []);
+
+  const allCategoryKeys = useMemo(
+    () => catalogCategories.map((c) => c.key),
+    [catalogCategories]
+  );
+
   // ---- Voting setup state ----
-  const [setupKeys, setSetupKeys] = useState<string[]>([
-    "best_picture",
-    "best_actor",
-    "best_actress",
-  ]);
+  // UX default: all selected. (If you prefer none, replace with [])
+  const [setupKeys, setSetupKeys] = useState<string[]>(() => allCategoryKeys);
   const [setupMsg, setSetupMsg] = useState<string | null>(null);
 
   // ---- Reveal/results state ----
@@ -66,18 +79,162 @@ export default function HostPanelPage() {
   const [results, setResults] = useState<ResultsResponse | null>(null);
   const [revealMsg, setRevealMsg] = useState<string | null>(null);
 
-  // ---- Modal state (NEW) ----
+  // ---- Modal state ----
   const [showRevealConfirm, setShowRevealConfirm] = useState(false);
   const [revealLoading, setRevealLoading] = useState(false);
 
+  // ---- Edit names ----
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+  const [savingInviteId, setSavingInviteId] = useState<string | null>(null);
+  const [renameMsg, setRenameMsg] = useState<string | null>(null);
+  const [editingInviteId, setEditingInviteId] = useState<string | null>(null);
+
+  function toggleKey(key: string, checked: boolean) {
+    setSetupKeys((prev) => {
+      if (checked) return prev.includes(key) ? prev : [...prev, key];
+      return prev.filter((k) => k !== key);
+    });
+  }
+
+  function selectAll() {
+  setSetupKeys(allCategoryKeys);
+}
+
+function selectBig5() {
+    setSetupKeys([
+      "best-picture",
+      "actor-leading",
+      "actress-leading",
+      "directing",
+      "writing-original",
+    ]);
+  }
+
+function selectBig8() {
+    setSetupKeys([
+      "best-picture",
+      "actress-leading",
+      "actor-leading",
+      "actress-supporting",
+      "actor-supporting",
+      "directing",
+      "international-feature",
+      "animated-feature",
+    ]);
+  }
+
+function selectActingOnly() {
+    setSetupKeys([
+      "actor-leading",
+      "actress-leading",
+      "actor-supporting",
+      "actress-supporting",
+    ]);
+  }
+
+function selectAboveTheLine() {
+    setSetupKeys([
+      "best-picture",
+      "directing",
+      "writing-original",
+      "writing-adapted",
+      "actor-leading",
+      "actress-leading",
+      "actor-supporting",
+      "actress-supporting",
+    ]);
+  }
+
+function selectTechnicalAwards() {
+    setSetupKeys([
+      "cinematography",
+      "production-design",
+      "costume-design",
+      "film-editing",
+      "sound",
+      "visual-effects",
+      "makeup-hairstyling",
+    ]);
+  }
+
+function clearAll() {
+    setSetupKeys([]);
+  }
+
   async function loadInvites() {
-    const res = await fetch(`/api/groups/${code}/invites`);
+    const res = await fetch(`/api/groups/${code}/invites?k=${adminToken}`);
     const data = await res.json();
     setInvites(data);
   }
 
+  useEffect(() => {
+    // inicializa drafts solo si no existe ya una entrada (para no pisar lo que estás editando)
+    setNameDrafts((prev) => {
+      const next = { ...prev };
+      for (const inv of invites) {
+        if (next[inv.id] === undefined) next[inv.id] = inv.display_name ?? "";
+      }
+      return next;
+    });
+  }, [invites]);
+
+  async function saveInviteName(inviteId: string) {
+    if (!adminToken) return alert("Missing admin token");
+
+    const draft = (nameDrafts[inviteId] ?? "").trim();
+    if (!draft) {
+      setRenameMsg("Name cannot be empty.");
+      return;
+    }
+
+    setRenameMsg(null);
+    setSavingInviteId(inviteId);
+
+    try {
+      const res = await fetch(`/api/groups/${code}/invites/${inviteId}?k=${adminToken}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ display_name: draft }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        setRenameMsg(json?.error ?? "Failed to rename");
+        return;
+      }
+
+      // ✅ update local state in-place (keeps same order)
+      setInvites((prev) =>
+        prev.map((inv) =>
+          inv.id === inviteId ? { ...inv, display_name: json.display_name } : inv
+        )
+      );
+
+      setRenameMsg("Name updated ✅");
+      setEditingInviteId(null); // ✅ hide input after save
+    } finally {
+      setSavingInviteId(null);
+    }
+  }
+
+  function startRename(inv: Invite) {
+    setNameDrafts((prev) => ({
+      ...prev,
+      [inv.id]: prev[inv.id] ?? inv.display_name ?? "",
+    }));
+    setEditingInviteId(inv.id);
+    setRenameMsg(null);
+  }
+
+  function cancelRename(inv: Invite) {
+    // reset draft to current value
+    setNameDrafts((prev) => ({ ...prev, [inv.id]: inv.display_name ?? "" }));
+    setEditingInviteId(null);
+    setRenameMsg(null);
+  }
+
   async function generateInvites() {
-    await fetch(`/api/groups/${code}/invites`, {
+    await fetch(`/api/groups/${code}/invites?k=${adminToken}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ count: inviteCount }),
@@ -91,6 +248,12 @@ export default function HostPanelPage() {
       alert("Missing admin token");
       return;
     }
+
+    if (setupKeys.length === 0) {
+      setSetupMsg("Select at least one category.");
+      return;
+    }
+
     setSetupMsg(null);
 
     const res = await fetch(`/api/groups/${code}/setup?k=${adminToken}`, {
@@ -122,6 +285,14 @@ export default function HostPanelPage() {
     }
   }
 
+  async function refreshProgress() {
+    // status requiere adminToken; invites no
+    if (!adminToken) return;
+
+    // en paralelo para que sea más rápido
+    await Promise.all([loadStatus(), loadInvites()]);
+  }
+
   async function loadResults() {
     if (!adminToken) return;
     const res = await fetch(`/api/groups/${code}/results?k=${adminToken}`);
@@ -148,7 +319,6 @@ export default function HostPanelPage() {
 
       setRevealMsg("Revealed ✅ Voting is now closed.");
       await loadStatus();
-      // loadStatus ya llama loadResults si revealAt != null
       setShowRevealConfirm(false);
     } finally {
       setRevealLoading(false);
@@ -162,7 +332,7 @@ export default function HostPanelPage() {
     let cancelled = false;
 
     (async () => {
-      const res = await fetch(`/api/groups/${code}/invites`);
+      const res = await fetch(`/api/groups/${code}/invites?k=${adminToken}`);
       const data = await res.json();
       if (!cancelled) setInvites(data);
     })();
@@ -276,7 +446,7 @@ export default function HostPanelPage() {
 
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={loadStatus}
+              onClick={refreshProgress}
               disabled={!adminToken}
               className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60"
             >
@@ -294,7 +464,11 @@ export default function HostPanelPage() {
                   : "bg-yellow-500 text-black hover:bg-yellow-400",
               ].join(" ")}
             >
-              {isRevealed ? "Results revealed 🏆" : revealLoading ? "Revealing..." : "Reveal results"}
+              {isRevealed
+                ? "Results revealed 🏆"
+                : revealLoading
+                ? "Revealing..."
+                : "Reveal results"}
             </button>
           </div>
 
@@ -352,61 +526,99 @@ export default function HostPanelPage() {
 
         {/* Voting setup */}
         <div className="rounded-xl border border-neutral-800 p-4 space-y-3">
-          <div className="font-medium">Voting setup</div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="font-medium">Voting setup</div>
 
-          <label className="flex items-center gap-2 text-sm text-neutral-300">
-            <input
-              type="checkbox"
-              checked={setupKeys.includes("best_picture")}
-              onChange={(e) =>
-                setSetupKeys((prev) =>
-                  e.target.checked
-                    ? [...prev, "best_picture"]
-                    : prev.filter((k) => k !== "best_picture")
-                )
-              }
-            />
-            Best Picture
-          </label>
+            <div className="text-xs text-neutral-400">
+              Selected:{" "}
+              <span className="font-mono">
+                {setupKeys.length}/{allCategoryKeys.length}
+              </span>
+            </div>
+          </div>
 
-          <label className="flex items-center gap-2 text-sm text-neutral-300">
-            <input
-              type="checkbox"
-              checked={setupKeys.includes("best_actor")}
-              onChange={(e) =>
-                setSetupKeys((prev) =>
-                  e.target.checked
-                    ? [...prev, "best_actor"]
-                    : prev.filter((k) => k !== "best_actor")
-                )
-              }
-            />
-            Best Actor
-          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={selectAll}
+              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+            >
+              Select All
+            </button>
 
-          <label className="flex items-center gap-2 text-sm text-neutral-300">
-            <input
-              type="checkbox"
-              checked={setupKeys.includes("best_actress")}
-              onChange={(e) =>
-                setSetupKeys((prev) =>
-                  e.target.checked
-                    ? [...prev, "best_actress"]
-                    : prev.filter((k) => k !== "best_actress")
-                )
-              }
-            />
-            Best Actress
-          </label>
+            <button
+              onClick={selectBig5}
+              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+            >
+              Big 5
+            </button>
+
+            <button
+              onClick={selectBig8}
+              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+            >
+              Big 8
+            </button>
+
+            <button
+              onClick={selectActingOnly}
+              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+            >
+              Acting Only
+            </button>
+
+            <button
+              onClick={selectAboveTheLine}
+              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+            >
+              Above the Line
+            </button>
+
+            <button
+              onClick={selectTechnicalAwards}
+              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+            >
+              Technical Awards
+            </button>
+
+            <button
+              onClick={clearAll}
+              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+            >
+              Clear
+            </button>
+
+            <button
+              onClick={applySetup}
+              className="rounded-md bg-yellow-500 px-3 py-2 text-sm font-medium text-black hover:bg-yellow-400"
+            >
+              Apply setup
+            </button>
+          </div>
 
           {setupMsg && <div className="text-sm text-neutral-300">{setupMsg}</div>}
 
-          <button
-            onClick={applySetup}
-            className="inline-flex items-center justify-center rounded-md bg-yellow-500 px-3 py-2 text-sm font-medium text-black hover:bg-yellow-400"
-          >
-            Apply setup
-          </button>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {catalogCategories.map((cat) => {
+              const checked = setupKeys.includes(cat.key);
+              return (
+                <label
+                  key={cat.key}
+                  className="flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-900"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => toggleKey(cat.key, e.target.checked)}
+                  />
+                  <span>{cat.name}</span>
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="text-xs text-neutral-500">
+            Tip: Best Picture is first. Use “Clear” if you want a small ballot.
+          </div>
         </div>
 
         {/* Generate invites */}
@@ -432,17 +644,67 @@ export default function HostPanelPage() {
         <div className="rounded-xl border border-neutral-800 p-4">
           <h2 className="text-lg font-medium mb-3">Invites</h2>
           <div className="space-y-2">
+            {renameMsg && (
+              <div className="mb-3 text-sm text-neutral-300">{renameMsg}</div>
+            )}
             {invites.map((invite) => (
               <div
                 key={invite.id}
                 className="flex justify-between items-center border border-neutral-800 p-3 rounded-md"
               >
                 <div>
-                  <div className="font-medium">
-                    {invite.role === "host" ? "Host" : invite.display_name}
-                  </div>
-                  <div className="text-sm text-neutral-400">
-                    {invite.used_at ? "Voted" : "Pending"}
+                  <div className="space-y-1">
+                    {/* Name line (normal) */}
+                    {editingInviteId !== invite.id ? (
+                      <div className="flex items-center gap-2">
+                        <div className="font-medium">
+                          {invite.role === "host"
+                            ? `${invite.display_name} (Host)`
+                            : invite.display_name}
+                        </div>
+
+                        <button
+                          onClick={() => startRename(invite)}
+                          disabled={!adminToken}
+                          className="text-xs bg-neutral-800 px-2 py-1 rounded hover:bg-neutral-700 disabled:opacity-60"
+                        >
+                          Rename
+                        </button>
+                      </div>
+                    ) : (
+                      // Edit mode
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          value={nameDrafts[invite.id] ?? ""}
+                          onChange={(e) =>
+                            setNameDrafts((prev) => ({ ...prev, [invite.id]: e.target.value }))
+                          }
+                          className="bg-neutral-900 border border-neutral-800 px-2 py-1 rounded-md text-sm w-64"
+                          placeholder="Display name"
+                          autoFocus
+                        />
+
+                        <button
+                          onClick={() => saveInviteName(invite.id)}
+                          disabled={!adminToken || savingInviteId === invite.id}
+                          className="text-sm bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-400 disabled:opacity-60"
+                        >
+                          {savingInviteId === invite.id ? "Saving..." : "Save"}
+                        </button>
+
+                        <button
+                          onClick={() => cancelRename(invite)}
+                          disabled={savingInviteId === invite.id}
+                          className="text-sm bg-neutral-800 px-3 py-1 rounded hover:bg-neutral-700 disabled:opacity-60"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="text-sm text-neutral-400">
+                      {invite.used_at ? "Voted" : "Pending"}
+                    </div>
                   </div>
                 </div>
 
@@ -458,7 +720,7 @@ export default function HostPanelPage() {
         </div>
       </div>
 
-      {/* Reveal confirm modal (NEW) */}
+      {/* Reveal confirm modal */}
       {showRevealConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
@@ -469,12 +731,13 @@ export default function HostPanelPage() {
             <h3 className="text-lg font-semibold">Reveal results?</h3>
 
             <p className="mt-2 text-sm text-neutral-300">
-              This action will <span className="font-medium">close voting</span>. Once revealed,
-              no one will be able to submit votes.
+              This action will <span className="font-medium">close voting</span>. Once revealed, no
+              one will be able to submit votes.
             </p>
 
             <p className="mt-2 text-sm text-neutral-400">
-              Use this only when youre ready to show results (even if some people didn&apos;t vote).
+              Use this only when you&apos;re ready to show results (even if some people didn&apos;t
+              vote).
             </p>
 
             <div className="mt-4 flex justify-end gap-2">

@@ -48,15 +48,16 @@ export async function GET(
 
     if (nomError) throw nomError;
 
-    // ballots for group
+    // ballots for group (include invite_id to derive voters)
     const { data: ballots, error: balError } = await supabaseServer
       .from("ballots")
-      .select("id")
+      .select("id, invite_id")
       .eq("group_id", group.id);
 
     if (balError) throw balError;
 
     const ballotIds = (ballots ?? []).map((b) => b.id);
+    const inviteIds = Array.from(new Set((ballots ?? []).map((b) => b.invite_id).filter(Boolean)));
 
     // votes
     const { data: votes, error: voteError } = ballotIds.length
@@ -95,9 +96,25 @@ export async function GET(
       return { categoryId: c.id, categoryName: c.name, nominees: nomineeResults };
     });
 
+    // load invite info for voters
+    const { data: votingInvites, error: votersError } = inviteIds.length
+      ? await supabaseServer
+          .from("invites")
+          .select("display_name, used_at")
+          .in("id", inviteIds)
+      : { data: [], error: null };
+
+    if (votersError) throw votersError;
+
+    const voters = (votingInvites ?? []).map((v) => ({
+      displayName: v.display_name,
+      voted: v.used_at !== null,
+    }));
+
     return NextResponse.json({
       group: { title: group.title, code, revealAt: group.reveal_at },
       results,
+      voters,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

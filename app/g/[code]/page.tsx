@@ -144,7 +144,9 @@ export default function GroupVotePage() {
         <div className="max-w-lg space-y-3 text-center">
           <h1 className="text-2xl font-semibold">{data.group.title}</h1>
 
-          <p className="text-neutral-300">You already voted. 🎬</p>
+          <p className="text-neutral-300">
+            {data.invite.displayName}, you already voted. 🎬
+          </p>
 
           {data.group.revealAt ? (
             <>
@@ -161,7 +163,7 @@ export default function GroupVotePage() {
             </>
           ) : (
             <p className="text-neutral-400 text-sm">
-              Wait for results or the host reveal.
+              Wait for the host to reveal the results.
             </p>
           )}
         </div>

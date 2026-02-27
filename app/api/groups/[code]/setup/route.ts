@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { OSCARS_CATALOG_2026 } from "@/lib/catalog";
+import { OSCARS_CATALOG, type CatalogCategory } from "@/lib/catalog";
 
 export async function POST(
   req: Request,
@@ -45,35 +45,62 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 3) Clear existing setup (MVP: overwrite)
-    await supabaseServer.from("categories").delete().eq("group_id", group.id);
-    // nominees are cascade deleted via categories -> nominees FK
+    // 3) Build selection using REAL catalog
+    // Preserve the official-ish order: sort_order if present, else catalog array order
+    const catalogSorted = [...OSCARS_CATALOG].sort((a, b) => {
+      const ao = a.sort_order ?? 9999;
+      const bo = b.sort_order ?? 9999;
+      if (ao !== bo) return ao - bo;
+      return 0;
+    });
 
-    // 4) Insert categories
-    const selected = OSCARS_CATALOG_2026.filter((c) => categoryKeys.includes(c.key));
+    const selected: CatalogCategory[] = catalogSorted.filter((c) =>
+      categoryKeys.includes(c.key)
+    );
+
+    if (selected.length === 0) {
+      return NextResponse.json({ error: "No valid categories selected" }, { status: 400 });
+    }
+
+    // 4) Clear existing setup (MVP: overwrite)
+    // nominees should cascade delete via FK from categories -> nominees
+    const { error: delError } = await supabaseServer
+      .from("categories")
+      .delete()
+      .eq("group_id", group.id);
+
+    if (delError) throw delError;
+
+    // 5) Insert categories (sort_order consistent)
+    // We choose sort_order = the category's catalog sort_order (1..24) if present,
+    // otherwise fallback to the current order index.
     const categoriesToInsert = selected.map((c, idx) => ({
       group_id: group.id,
       name: c.name,
-      sort_order: idx,
+      sort_order: c.sort_order ?? idx + 1,
     }));
 
     const { data: insertedCategories, error: catInsertError } = await supabaseServer
       .from("categories")
       .insert(categoriesToInsert)
-      .select("id, name");
+      .select("id, name, sort_order")
+      .order("sort_order", { ascending: true });
 
     if (catInsertError) throw catInsertError;
+    if (!insertedCategories || insertedCategories.length !== selected.length) {
+      return NextResponse.json({ error: "Failed to insert categories" }, { status: 500 });
+    }
 
-    // 5) Insert nominees
-    const nameToId = new Map<string, string>();
-    for (const c of insertedCategories ?? []) nameToId.set(c.name, c.id);
+    // 6) Map inserted categories back to selected reliably
+    // Do NOT map by name (could collide in other years). Use the inserted order.
+    const nomineesToInsert = selected.flatMap((cat, catIdx) => {
+      const inserted = insertedCategories[catIdx];
+      const categoryId = inserted.id;
 
-    const nomineesToInsert = selected.flatMap((c) => {
-      const categoryId = nameToId.get(c.name)!;
-      return c.nominees.map((n, idx) => ({
+      return cat.nominees.map((nomineeName, nomineeIdx) => ({
         category_id: categoryId,
-        name: n,
-        sort_order: idx,
+        name: nomineeName,
+        sort_order: nomineeIdx + 1,
       }));
     });
 
@@ -83,7 +110,13 @@ export async function POST(
 
     if (nomInsertError) throw nomInsertError;
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      inserted: {
+        categories: insertedCategories.length,
+        nominees: nomineesToInsert.length,
+      },
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
