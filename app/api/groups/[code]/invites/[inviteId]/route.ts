@@ -25,7 +25,7 @@ export async function PATCH(
       return NextResponse.json({ error: "display_name is required" }, { status: 400 });
     }
     if (displayName.length > 40) {
-      return NextResponse.json({ error: "display_name too long (max 40)" }, { status: 400 });
+      return NextResponse.json({ error: "Name is too long (max 40 characters)" }, { status: 400 });
     }
 
     // 1) Find group by code

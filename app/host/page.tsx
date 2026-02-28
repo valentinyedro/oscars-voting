@@ -99,6 +99,8 @@ export default function HostListPage() {
   const [items, setItems] = useState<HostItem[] | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<HostItem | null>(null);
+  const [initialLoading, setInitialLoading] = useState(false);
+  const [needsInitialStatusLoad, setNeedsInitialStatusLoad] = useState(true);
 
   const shareOrigin = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -125,14 +127,16 @@ export default function HostListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function refreshStatuses() {
+  async function refreshStatuses(opts?: { initial?: boolean }) {
     if (!items || items.length === 0) return;
 
+    if (opts?.initial) setInitialLoading(true);
     setLoadingStatus(true);
+
     try {
       const results = await mapLimit(
         items,
-        6, // concurrency limit
+        6,
         async (it): Promise<Partial<HostItem> & { code: string }> => {
           try {
             const res = await fetch(`/api/groups/${it.code}/status?k=${it.token}`, {
@@ -169,16 +173,26 @@ export default function HostListPage() {
       });
     } finally {
       setLoadingStatus(false);
+      if (opts?.initial) setInitialLoading(false);
     }
   }
 
-  // auto-refresh statuses once after initial load
+  // auto-refresh statuses once after initial load (blocking UI)
   useEffect(() => {
     if (!items) return;
-    if (items.length === 0) return;
-    refreshStatuses();
+    if (items.length === 0) {
+      // no hay groups => no bloqueamos
+      setNeedsInitialStatusLoad(false);
+      return;
+    }
+    if (!needsInitialStatusLoad) return;
+
+    (async () => {
+      await refreshStatuses({ initial: true });
+      setNeedsInitialStatusLoad(false);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items?.length]);
+  }, [items, needsInitialStatusLoad]);
 
   function forget(code: string) {
     if (typeof window === "undefined") return;
@@ -190,6 +204,19 @@ export default function HostListPage() {
   function openHost(it: HostItem) {
     // IMPORTANT: do NOT include token in URL
     router.push(`/host/${it.code}`);
+  }
+
+  if (items !== null && items.length > 0 && needsInitialStatusLoad) {
+    return (
+      <main className="min-h-screen bg-neutral-950 text-neutral-100">
+        <div className="flex min-h-screen items-center justify-center px-6">
+          <div className="flex flex-col items-center gap-3 text-neutral-300">
+            <span className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-neutral-300/60 border-t-transparent" />
+            <div className="text-sm">Loading groups…</div>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -348,9 +375,13 @@ export default function HostListPage() {
                 </button>
 
                 <button
-                  onClick={() => {
-                    forget(removeTarget.code);
+                  onClick={async () => {
+                    const removedCode = removeTarget.code;
                     setRemoveTarget(null);
+                    forget(removedCode);
+
+                    // fuerza reload y luego refresh con lo nuevo
+                    setTimeout(() => refreshStatuses(), 0);
                   }}
                   className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium hover:bg-red-500"
                 >

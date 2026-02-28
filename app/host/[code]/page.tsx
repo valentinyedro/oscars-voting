@@ -32,7 +32,7 @@ type ResultsResponse =
     }
   | { error: string };
 
-  type StatusOk = Exclude<StatusResponse, { error: string }>;
+type StatusOk = Exclude<StatusResponse, { error: string }>;
 
 function hasError(x: unknown): x is { error: string } {
   return !!x && typeof x === "object" && "error" in x;
@@ -45,6 +45,9 @@ export default function HostPanelPage() {
   const code = params.code;
   const urlToken = searchParams.get("k");
   const storageKey = code ? `oscarsVoting:hostToken:${code}` : null;
+
+  const btnPress =
+    "transition-transform active:scale-95 motion-reduce:transform-none";
 
   const [adminToken, setAdminToken] = useState<string | null>(() => {
     // prioridad: URL > localStorage
@@ -72,16 +75,16 @@ export default function HostPanelPage() {
     [catalogCategories]
   );
 
+  // ---- General init  ----
+  const [initialLoading, setInitialLoading] = useState(true);
+
   // ---- Voting setup state ----
-  // UX default: all selected. (If you prefer none, replace with [])
   const [setupKeys, setSetupKeys] = useState<string[]>(() => allCategoryKeys);
-  const [setupMsg, setSetupMsg] = useState<string | null>(null);
   const [setupLocked, setSetupLocked] = useState<boolean>(false);
 
   // ---- Reveal/results state ----
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [results, setResults] = useState<ResultsResponse | null>(null);
-  const [revealMsg, setRevealMsg] = useState<string | null>(null);
 
   // ---- Modal state ----
   const [showRevealConfirm, setShowRevealConfirm] = useState(false);
@@ -90,8 +93,43 @@ export default function HostPanelPage() {
   // ---- Edit names ----
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
   const [savingInviteId, setSavingInviteId] = useState<string | null>(null);
-  const [renameMsg, setRenameMsg] = useState<string | null>(null);
   const [editingInviteId, setEditingInviteId] = useState<string | null>(null);
+
+  // ---- Toast ----
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [applyLoading, setApplyLoading] = useState(false);
+
+  type ToastState = {
+    msg: string;
+    kind: "ok" | "err";
+    phase: "enter" | "shown" | "exit";
+  };
+
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const toastTimers = useMemo(() => ({ t1: 0, t2: 0, t3: 0 }), []);
+
+  function showToast(msg: string, kind: "ok" | "err" = "ok") {
+    window.clearTimeout(toastTimers.t1);
+    window.clearTimeout(toastTimers.t2);
+    window.clearTimeout(toastTimers.t3);
+
+    setToast({ msg, kind, phase: "enter" });
+
+    toastTimers.t1 = window.setTimeout(() => {
+      setToast((t) => (t ? { ...t, phase: "shown" } : t));
+    }, 20);
+
+    // visible duration
+    const visibleMs = 1600;
+
+    toastTimers.t2 = window.setTimeout(() => {
+      setToast((t) => (t ? { ...t, phase: "exit" } : t));
+    }, visibleMs);
+
+    toastTimers.t3 = window.setTimeout(() => {
+      setToast(null);
+    }, visibleMs + 280);
+  }
 
   function toggleKey(key: string, checked: boolean) {
     setSetupKeys((prev) => {
@@ -101,10 +139,10 @@ export default function HostPanelPage() {
   }
 
   function selectAll() {
-  setSetupKeys(allCategoryKeys);
-}
+    setSetupKeys(allCategoryKeys);
+  }
 
-function selectBig5() {
+  function selectBig5() {
     setSetupKeys([
       "best-picture",
       "actor-leading",
@@ -114,7 +152,7 @@ function selectBig5() {
     ]);
   }
 
-function selectBig8() {
+  function selectBig8() {
     setSetupKeys([
       "best-picture",
       "actress-leading",
@@ -127,7 +165,7 @@ function selectBig8() {
     ]);
   }
 
-function selectActingOnly() {
+  function selectActingOnly() {
     setSetupKeys([
       "actor-leading",
       "actress-leading",
@@ -136,7 +174,7 @@ function selectActingOnly() {
     ]);
   }
 
-function selectAboveTheLine() {
+  function selectAboveTheLine() {
     setSetupKeys([
       "best-picture",
       "directing",
@@ -149,7 +187,7 @@ function selectAboveTheLine() {
     ]);
   }
 
-function selectTechnicalAwards() {
+  function selectTechnicalAwards() {
     setSetupKeys([
       "cinematography",
       "production-design",
@@ -161,7 +199,7 @@ function selectTechnicalAwards() {
     ]);
   }
 
-function clearAll() {
+  function clearAll() {
     setSetupKeys([]);
   }
 
@@ -183,39 +221,45 @@ function clearAll() {
   }, [invites]);
 
   async function saveInviteName(inviteId: string) {
-    if (!adminToken) return alert("Missing admin token");
-
-    const draft = (nameDrafts[inviteId] ?? "").trim();
-    if (!draft) {
-      setRenameMsg("Name cannot be empty.");
+    if (!adminToken) {
+      showToast("Missing admin token", "err");
       return;
     }
 
-    setRenameMsg(null);
+    const draft = (nameDrafts[inviteId] ?? "").trim();
+    if (!draft) {
+      showToast("Name cannot be empty.", "err");
+      return;
+    }
+
     setSavingInviteId(inviteId);
 
     try {
-      const res = await fetch(`/api/groups/${code}/invites/${inviteId}?k=${adminToken}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ display_name: draft }),
-      });
+      const res = await fetch(
+        `/api/groups/${code}/invites/${inviteId}?k=${adminToken}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ display_name: draft }),
+        }
+      );
 
       const json = await res.json();
       if (!res.ok) {
-        setRenameMsg(json?.error ?? "Failed to rename");
+        showToast(json?.error ?? "Failed to rename", "err");
         return;
       }
 
-      // ✅ update local state in-place (keeps same order)
       setInvites((prev) =>
         prev.map((inv) =>
           inv.id === inviteId ? { ...inv, display_name: json.display_name } : inv
         )
       );
 
-      setRenameMsg("Name updated ✅");
-      setEditingInviteId(null); // ✅ hide input after save
+      showToast("Name updated", "ok");
+      setEditingInviteId(null);
+    } catch {
+      showToast("Failed to rename", "err");
     } finally {
       setSavingInviteId(null);
     }
@@ -227,14 +271,11 @@ function clearAll() {
       [inv.id]: prev[inv.id] ?? inv.display_name ?? "",
     }));
     setEditingInviteId(inv.id);
-    setRenameMsg(null);
   }
 
   function cancelRename(inv: Invite) {
-    // reset draft to current value
     setNameDrafts((prev) => ({ ...prev, [inv.id]: inv.display_name ?? "" }));
     setEditingInviteId(null);
-    setRenameMsg(null);
   }
 
   // Auto-generate missing invites to match group's maxMembers
@@ -242,7 +283,6 @@ function clearAll() {
     if (!code || !adminToken) return;
     if (!status || hasError(status)) return;
 
-    // status is valid (not error) here
     const statusOkLocal = status as StatusOk;
     const max = statusOkLocal.group?.maxMembers ?? 0;
     const current = invites.length;
@@ -260,60 +300,58 @@ function clearAll() {
           body: JSON.stringify({ count: delta }),
         });
 
-        if (cancelled) return;
-
-        // 1) primero traemos invites (esto ya refleja que están listos)
         await loadInvites();
-
-        if (cancelled) return;
-
-        // 2) ocultar el bloque INMEDIATAMENTE
         setGeneratingInvites(false);
 
-        // 3) refrescar status después (ya sin mostrar “generating”)
+        if (cancelled) return;
         await loadStatus();
       } catch {
-        if (!cancelled) setGeneratingInvites(false);
+        setGeneratingInvites(false);
+        showToast("Failed to generate invites", "err");
       }
     })();
 
     return () => {
       cancelled = true;
+      setGeneratingInvites(false);
     };
   }, [code, adminToken, status, invites.length]);
 
   async function applySetup() {
     if (!adminToken) {
-      alert("Missing admin token");
+      showToast("Missing admin token", "err");
       return;
     }
-
     if (setupLocked) {
-      setSetupMsg("Voting setup is locked — votes have already been cast.");
+      showToast("Voting setup is locked — votes have already been cast.", "err");
       return;
     }
-
     if (setupKeys.length === 0) {
-      setSetupMsg("Select at least one category.");
+      showToast("Select at least one category.", "err");
       return;
     }
 
-    setSetupMsg(null);
+    setApplyLoading(true);
+    try {
+      const res = await fetch(`/api/groups/${code}/setup?k=${adminToken}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryKeys: setupKeys }),
+      });
 
-    const res = await fetch(`/api/groups/${code}/setup?k=${adminToken}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ categoryKeys: setupKeys }),
-    });
+      const json = await res.json();
+      if (!res.ok) {
+        showToast(json?.error ?? "Failed to setup voting", "err");
+        return;
+      }
 
-    const json = await res.json();
-    if (!res.ok) {
-      setSetupMsg(json?.error ?? "Failed to setup voting");
-      return;
+      showToast("Voting setup applied", "ok");
+      setResults(null);
+    } catch {
+      showToast("Failed to setup voting", "err");
+    } finally {
+      setApplyLoading(false);
     }
-
-    setSetupMsg("Voting setup applied ✅");
-    setResults(null); // si cambia setup, invalidamos results cacheados
   }
 
   async function loadStatus() {
@@ -323,18 +361,26 @@ function clearAll() {
     const json = (await res.json()) as StatusResponse;
     setStatus(json);
 
-    // si ya está revelado, auto-cargar resultados
     if (!hasError(json) && json.group.revealAt) {
       await loadResults();
     }
   }
 
   async function refreshProgress() {
-    // status requiere adminToken; invites no
-    if (!adminToken) return;
+    if (!adminToken) {
+      showToast("Missing admin token", "err");
+      return;
+    }
 
-    // en paralelo para que sea más rápido
-    await Promise.all([loadStatus(), loadInvites()]);
+    setProgressLoading(true);
+    try {
+      await Promise.all([loadStatus(), loadInvites()]);
+      showToast("Progress updated", "ok");
+    } catch {
+      showToast("Failed to refresh progress", "err");
+    } finally {
+      setProgressLoading(false);
+    }
   }
 
   async function loadResults() {
@@ -345,10 +391,12 @@ function clearAll() {
   }
 
   async function revealNowConfirmed() {
-    if (!adminToken) return;
+    if (!adminToken) {
+      showToast("Missing admin token", "err");
+      return;
+    }
 
     setRevealLoading(true);
-    setRevealMsg(null);
 
     try {
       const res = await fetch(`/api/groups/${code}/reveal?k=${adminToken}`, {
@@ -357,70 +405,78 @@ function clearAll() {
       const json = await res.json();
 
       if (!res.ok) {
-        setRevealMsg(json?.error ?? "Reveal failed");
+        showToast(json?.error ?? "Reveal failed", "err");
         return;
       }
 
-      setRevealMsg("Revealed ✅ Voting is now closed.");
+      showToast("Revealed ✓ Voting is now closed.", "ok");
       await loadStatus();
       setShowRevealConfirm(false);
+    } catch {
+      showToast("Reveal failed", "err");
     } finally {
       setRevealLoading(false);
     }
   }
 
-  // load invites on mount/when code changes
-  useEffect(() => {
-    if (!code) return;
-
-    let cancelled = false;
-
-    (async () => {
-      const res = await fetch(`/api/groups/${code}/invites?k=${adminToken}`);
-      const data = await res.json();
-      if (!cancelled) setInvites(data);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [code]);
-
-  // load status when adminToken available
+  // load ALL (status + invites + setup + results if revealed) before rendering "ready"
   useEffect(() => {
     if (!code || !adminToken) return;
 
     let cancelled = false;
 
     (async () => {
-      const res = await fetch(`/api/groups/${code}/status?k=${adminToken}`);
-      const json = (await res.json()) as StatusResponse;
+      setInitialLoading(true);
 
-      if (!cancelled) setStatus(json);
-
-      if (!cancelled && !hasError(json) && json.group.revealAt) {
-        const r2 = await fetch(`/api/groups/${code}/results?k=${adminToken}`);
-        const j2 = (await r2.json()) as ResultsResponse;
-        if (!cancelled) setResults(j2);
-      }
-      // load persisted setup and whether it's locked by votes
       try {
-        const sres = await fetch(`/api/groups/${code}/setup?k=${adminToken}`);
-        const sj = await sres.json();
-        if (!cancelled && sres.ok && sj?.categoryKeys) {
-          // only set keys if we got a valid array
-          setSetupKeys(sj.categoryKeys ?? allCategoryKeys);
-          setSetupLocked(!!sj.hasVotes);
+        const [invRes, statusRes, setupRes] = await Promise.all([
+          fetch(`/api/groups/${code}/invites?k=${adminToken}`),
+          fetch(`/api/groups/${code}/status?k=${adminToken}`),
+          fetch(`/api/groups/${code}/setup?k=${adminToken}`),
+        ]);
+
+        const [invJson, statusJson, setupJson] = await Promise.all([
+          invRes.json(),
+          statusRes.json(),
+          setupRes.json().catch(() => null),
+        ]);
+
+        if (cancelled) return;
+
+        setInvites(invJson ?? []);
+        setStatus(statusJson as StatusResponse);
+
+        // setup (fallbacks sanos)
+        if (setupRes.ok && setupJson?.categoryKeys) {
+          setSetupKeys(setupJson.categoryKeys ?? allCategoryKeys);
+          setSetupLocked(!!setupJson.hasVotes);
+        } else {
+          setSetupKeys(allCategoryKeys);
+          setSetupLocked(false);
         }
-      } catch (e) {
-        // ignore
+
+        // if revealed, load results BEFORE unlocking UI
+        const s = statusJson as StatusResponse;
+        if (!hasError(s) && s.group.revealAt) {
+          const r2 = await fetch(`/api/groups/${code}/results?k=${adminToken}`);
+          const j2 = (await r2.json()) as ResultsResponse;
+          if (!cancelled) setResults(j2);
+        } else {
+          if (!cancelled) setResults(null);
+        }
+      } catch {
+        if (!cancelled) {
+          showToast("Failed to load host panel data", "err");
+        }
+      } finally {
+        if (!cancelled) setInitialLoading(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [code, adminToken]);
+  }, [code, adminToken, allCategoryKeys]);
 
   useEffect(() => {
     if (!code) return;
@@ -436,17 +492,53 @@ function clearAll() {
     }
   }, [code]);
 
-  function copyLink(token: string) {
+  async function copyLink(token: string) {
     const link = `${window.location.origin}/g/${code}?t=${token}`;
-    navigator.clipboard.writeText(link);
-    alert("Invite link copied");
+    try {
+      await navigator.clipboard.writeText(link);
+      showToast("Invite link copied", "ok");
+    } catch {
+      showToast("Could not copy link", "err");
+    }
   }
 
-  function copyAdminLink() {
+  async function shareInvite(invite: Invite) {
+    const link = `${window.location.origin}/g/${code}?t=${invite.token}`;
+
+    const message = `Hey ${invite.display_name}!
+
+  You’re invited to vote in our Oscars ballot 🎬🏆
+
+  Cast your vote here:
+  ${link}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "Oscars Voting",
+          text: message,
+          url: link,
+        });
+        showToast("Invitation shared", "ok");
+      } else {
+        // fallback: copy to clipboard
+        await navigator.clipboard.writeText(message);
+        showToast("Invitation copied to clipboard", "ok");
+      }
+    } catch {
+      showToast("Could not share invitation", "err");
+    }
+  }
+
+  async function copyAdminLink() {
     if (!adminToken) return;
     const admin = `${window.location.origin}/host/${code}?k=${adminToken}`;
-    navigator.clipboard.writeText(admin);
-    alert("Admin link copied");
+    try {
+      await navigator.clipboard.writeText(admin);
+      showToast("Host panel link copied", "ok");
+    } catch {
+      showToast("Could not copy link", "err");
+    }
   }
 
   // persist admin token + optionally reflect it in the URL
@@ -456,7 +548,6 @@ function clearAll() {
 
     localStorage.setItem(storageKey, adminToken);
 
-    // si la URL no tiene k, la actualizamos (solo cosmetico)
     if (!urlToken) {
       window.history.replaceState(null, "", `/host/${code}?k=${adminToken}`);
     }
@@ -471,8 +562,29 @@ function clearAll() {
   const threshold = Math.ceil(maxMembers / 2);
   const voted = statusOk?.counts.voted ?? 0;
 
-  // source of truth from backend:
   const canReveal = !!statusOk?.canReveal;
+
+  function Spinner() {
+    return (
+      <span
+        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+        aria-hidden="true"
+      />
+    );
+  }
+
+  if (adminToken && initialLoading) {
+    return (
+      <main className="min-h-screen bg-neutral-950 text-neutral-100">
+        <div className="flex min-h-screen items-center justify-center px-6">
+          <div className="flex flex-col items-center gap-3 text-neutral-300">
+            <span className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-neutral-300/60 border-t-transparent" />
+            <div className="text-sm">Loading host panel…</div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100 p-6">
@@ -487,27 +599,28 @@ function clearAll() {
         </div>
 
         <div className="rounded-xl border border-neutral-800 p-4 space-y-3">
-        <div className="font-medium">Admin access</div>
+          <div className="font-medium">Admin access</div>
 
-        {!adminToken ? (
-          <div className="text-sm text-red-200">
-            Missing admin token. Open this page using your admin (host) link.
-          </div>
-        ) : (
-          <>
-            <button
-              onClick={copyAdminLink}
-              className="inline-flex items-center justify-center rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
-            >
-              Copy host panel link
-            </button>
-
-            <div className="text-xs text-neutral-500">
-              Keep this link private. Anyone with it can modify your voting room (setup, invites, reveal).
+          {!adminToken ? (
+            <div className="text-sm text-red-200">
+              Missing admin token. Open this page using your admin (host) link.
             </div>
-          </>
-        )}
-      </div>
+          ) : (
+            <>
+              <button
+                onClick={copyAdminLink}
+                className={`rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60 ${btnPress}`}
+              >
+                Copy host panel link
+              </button>
+
+              <div className="text-xs text-neutral-500">
+                Keep this link private. Anyone with it can modify your voting room
+                (setup, invites, reveal). You may use it to access the host panel from different devices.
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Progress + Reveal + Results */}
         <div className="rounded-xl border border-neutral-800 p-4 space-y-3">
@@ -539,19 +652,25 @@ function clearAll() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={refreshProgress}
-              disabled={!adminToken}
-              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60"
+              disabled={!adminToken || progressLoading}
+              className={`rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60 ${btnPress}`}
             >
-              Check voting progress
+              <span className="inline-flex items-center gap-2">
+                {progressLoading && <Spinner />}
+                {progressLoading ? "Checking..." : "Check voting progress"}
+              </span>
             </button>
 
             <button
               disabled={!adminToken || isRevealed || revealLoading || !canReveal}
               onClick={() => {
                 if (!isRevealed && canReveal) setShowRevealConfirm(true);
+                if (!canReveal && !isRevealed) {
+                  showToast("Not ready to reveal yet.", "err");
+                }
               }}
               className={[
-                "rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60",
+                `rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${btnPress}`,
                 isRevealed || !canReveal
                   ? "bg-neutral-800 text-neutral-400"
                   : "bg-yellow-500 text-black hover:bg-yellow-400",
@@ -564,25 +683,22 @@ function clearAll() {
                 : "Reveal results"}
             </button>
           </div>
-          {adminToken && !isRevealed && statusOk && (
-              <div className="text-xs text-neutral-400">
-                Reveal requires ≥{" "}
-                <span className="font-mono">
-                  {threshold}/{maxMembers}
-                </span>{" "}
-                votes. Current:{" "}
-                <span className="font-mono">
-                  {voted}/{maxMembers}
-                </span>
-                {!canReveal && (
-                  <span className="ml-2 text-yellow-200">
-                    (Not ready)
-                  </span>
-                )}
-              </div>
-            )}
 
-          {revealMsg && <div className="text-sm text-neutral-300">{revealMsg}</div>}
+          {adminToken && !isRevealed && statusOk && (
+            <div className="text-xs text-neutral-400">
+              Reveal requires ≥{" "}
+              <span className="font-mono">
+                {threshold}/{maxMembers}
+              </span>{" "}
+              votes. Current:{" "}
+              <span className="font-mono">
+                {voted}/{maxMembers}
+              </span>
+              {!canReveal && (
+                <span className="ml-2 text-yellow-200">(Not ready)</span>
+              )}
+            </div>
+          )}
 
           {results && hasError(results) && (
             <div className="text-sm text-red-200">{results.error}</div>
@@ -591,7 +707,8 @@ function clearAll() {
           {resultsOk && (
             <div className="pt-2 space-y-4">
               <div className="text-sm text-neutral-400">
-                Results for: <span className="font-mono">{resultsOk.group.code}</span>
+                Results for:{" "}
+                <span className="font-mono">{resultsOk.group.code}</span>
               </div>
 
               {resultsOk.results.map((cat) => {
@@ -651,7 +768,7 @@ function clearAll() {
             <button
               onClick={selectAll}
               disabled={setupLocked}
-              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+              className={`rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60 ${btnPress}`}
             >
               Select All
             </button>
@@ -659,7 +776,7 @@ function clearAll() {
             <button
               onClick={selectBig5}
               disabled={setupLocked}
-              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+              className={`rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60 ${btnPress}`}
             >
               Big 5
             </button>
@@ -667,7 +784,7 @@ function clearAll() {
             <button
               onClick={selectBig8}
               disabled={setupLocked}
-              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+              className={`rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60 ${btnPress}`}
             >
               Big 8
             </button>
@@ -675,7 +792,7 @@ function clearAll() {
             <button
               onClick={selectActingOnly}
               disabled={setupLocked}
-              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+              className={`rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60 ${btnPress}`}
             >
               Acting Only
             </button>
@@ -683,7 +800,7 @@ function clearAll() {
             <button
               onClick={selectAboveTheLine}
               disabled={setupLocked}
-              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+              className={`rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60 ${btnPress}`}
             >
               Above the Line
             </button>
@@ -691,7 +808,7 @@ function clearAll() {
             <button
               onClick={selectTechnicalAwards}
               disabled={setupLocked}
-              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+              className={`rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60 ${btnPress}`}
             >
               Technical Awards
             </button>
@@ -699,29 +816,33 @@ function clearAll() {
             <button
               onClick={clearAll}
               disabled={setupLocked}
-              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
+              className={`rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60 ${btnPress}`}
             >
               Clear
             </button>
 
             <button
               onClick={applySetup}
-              disabled={setupLocked}
-              className="rounded-md bg-yellow-500 px-3 py-2 text-sm font-medium text-black hover:bg-yellow-400 disabled:opacity-60"
+              disabled={setupLocked || applyLoading}
+              className={`rounded-md bg-yellow-500 px-3 py-2 text-sm font-medium text-black hover:bg-yellow-400 disabled:opacity-60 ${btnPress}`}
             >
-              {setupLocked ? "Setup locked" : "Apply setup"}
+              <span className="inline-flex items-center gap-2">
+                {applyLoading && <Spinner />}
+                {setupLocked ? "Setup locked" : applyLoading ? "Applying..." : "Apply setup"}
+              </span>
             </button>
           </div>
-
-          {setupMsg && <div className="text-sm text-neutral-300">{setupMsg}</div>}
 
           <div className="grid gap-2 sm:grid-cols-2">
             {catalogCategories.map((cat) => {
               const checked = setupKeys.includes(cat.key);
-              const disabledClass = setupLocked ? "opacity-95" : "hover:bg-neutral-900";
-              const checkedClass = setupLocked && checked
-                ? "bg-yellow-500/10 text-yellow-200 border-yellow-500/30"
-                : "text-neutral-200";
+              const disabledClass = setupLocked
+                ? "opacity-95"
+                : "hover:bg-neutral-900";
+              const checkedClass =
+                setupLocked && checked
+                  ? "bg-yellow-500/10 text-yellow-200 border-yellow-500/30"
+                  : "text-neutral-200";
               return (
                 <label
                   key={cat.key}
@@ -737,7 +858,7 @@ function clearAll() {
                     checked={checked}
                     disabled={setupLocked}
                     onChange={(e) => toggleKey(cat.key, e.target.checked)}
-                    className={`${setupLocked ? "opacity-60" : ""} ${setupLocked && checked ? "accent-yellow-500" : ""}`}
+                    className={`accent-yellow-500 ${setupLocked ? "opacity-60" : ""}`}
                   />
                   <span>{cat.name}</span>
                 </label>
@@ -746,40 +867,42 @@ function clearAll() {
           </div>
 
           {setupLocked && (
-            <div className="text-sm text-yellow-200">Voting setup locked — votes have been cast.</div>
+            <div className="text-sm text-yellow-200">
+              Voting setup locked — votes have been cast.
+            </div>
           )}
 
           <div className="text-xs text-neutral-500">
-            Tip: Smaller ballots increase completion rate. You can adjust the setup until the first ballot is submitted.
+            Tip: Smaller ballots increase completion rate. You can adjust the
+            setup until the first ballot is submitted.
           </div>
         </div>
 
         {/* Generating invites (show only while generating) */}
         {generatingInvites && (
           <div className="rounded-xl border border-neutral-800 p-4">
-            <div className="text-sm text-neutral-300">
-              Generating invites…
-            </div>
+            <div className="text-sm text-neutral-300">Generating invites…</div>
           </div>
-)}
+        )}
 
         {/* Invites list */}
         <div className="rounded-xl border border-neutral-800 p-4">
           <h2 className="text-lg font-medium mb-3">Invites</h2>
+          <p className="text-sm text-neutral-400 mt-1 mb-3">
+            One link per person.
+            Each invite is unique — make sure it reaches the right hands.
+          </p>
           <div className="space-y-2">
-            {renameMsg && (
-              <div className="mb-3 text-sm text-neutral-300">{renameMsg}</div>
-            )}
             {invites.map((invite) => (
               <div
                 key={invite.id}
-                className="flex justify-between items-center border border-neutral-800 p-3 rounded-md"
+                className="border border-neutral-800 p-3 rounded-md"
               >
-                <div>
-                  <div className="space-y-1">
-                    {/* Name line (normal) */}
+                <div className="flex items-start justify-between gap-3 sm:items-center">
+                  {/* LEFT SIDE */}
+                  <div className="min-w-0 space-y-1">
                     {editingInviteId !== invite.id ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <div className="font-medium">
                           {invite.role === "host"
                             ? `${invite.display_name} (Host)`
@@ -789,28 +912,31 @@ function clearAll() {
                         <button
                           onClick={() => startRename(invite)}
                           disabled={!adminToken}
-                          className="text-xs bg-neutral-800 px-2 py-1 rounded hover:bg-neutral-700 disabled:opacity-60"
+                          className="text-xs bg-neutral-800 px-2 py-1 rounded hover:bg-neutral-700 disabled:opacity-60 transition-transform active:scale-95"
                         >
                           Rename
                         </button>
                       </div>
                     ) : (
-                      // Edit mode
-                      <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          value={nameDrafts[invite.id] ?? ""}
-                          onChange={(e) =>
-                            setNameDrafts((prev) => ({ ...prev, [invite.id]: e.target.value }))
-                          }
-                          className="bg-neutral-900 border border-neutral-800 px-2 py-1 rounded-md text-sm w-64"
-                          placeholder="Display name"
-                          autoFocus
-                        />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <input
+                        value={nameDrafts[invite.id] ?? ""}
+                        onChange={(e) =>
+                          setNameDrafts((prev) => ({
+                            ...prev,
+                            [invite.id]: e.target.value,
+                          }))
+                        }
+                        className="bg-neutral-900 border border-neutral-800 px-2 py-1 rounded-md text-sm w-full sm:w-64"
+                        placeholder="Display name"
+                        autoFocus
+                      />
 
+                      <div className="flex gap-2">
                         <button
                           onClick={() => saveInviteName(invite.id)}
                           disabled={!adminToken || savingInviteId === invite.id}
-                          className="text-sm bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-400 disabled:opacity-60"
+                          className={`text-sm bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-400 disabled:opacity-60 ${btnPress}`}
                         >
                           {savingInviteId === invite.id ? "Saving..." : "Save"}
                         </button>
@@ -818,25 +944,51 @@ function clearAll() {
                         <button
                           onClick={() => cancelRename(invite)}
                           disabled={savingInviteId === invite.id}
-                          className="text-sm bg-neutral-800 px-3 py-1 rounded hover:bg-neutral-700 disabled:opacity-60"
+                          className={`text-sm bg-neutral-800 px-3 py-1 rounded hover:bg-neutral-700 disabled:opacity-60 ${btnPress}`}
                         >
                           Cancel
                         </button>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    <div className="text-sm text-neutral-400">
+                  <div className="text-sm text-neutral-400">
                       {invite.used_at ? "Voted" : "Pending"}
                     </div>
                   </div>
-                </div>
 
-                <button
-                  onClick={() => copyLink(invite.token)}
-                  className="text-sm bg-neutral-800 px-3 py-1 rounded hover:bg-neutral-700"
-                >
-                  Copy link
-                </button>
+                  {/* RIGHT SIDE (botones arriba en mobile) */}
+                  {invite.role === "host" ? (
+                    <button
+                      onClick={() => {
+                        window.open(
+                          `/g/${code}?t=${invite.token}`,
+                          "_blank",
+                          "noopener,noreferrer"
+                        );
+                      }}
+                      className="text-sm bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-400 transition-transform active:scale-95"
+                    >
+                      Vote
+                    </button>
+                  ) : (
+                  <div className="shrink-0 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <button
+                      onClick={() => copyLink(invite.token)}
+                      className="text-sm bg-neutral-800 px-3 py-1 rounded hover:bg-neutral-700 transition-transform active:scale-95"
+                    >
+                      Copy link
+                    </button>
+
+                    <button
+                      onClick={() => shareInvite(invite)}
+                      className="text-sm bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-400 transition-transform active:scale-95"
+                    >
+                      Share invitation
+                    </button>
+                  </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -854,20 +1006,20 @@ function clearAll() {
             <h3 className="text-lg font-semibold">Reveal results?</h3>
 
             <p className="mt-2 text-sm text-neutral-300">
-              This action will <span className="font-medium">close voting</span>. Once revealed, no
-              one will be able to submit votes.
+              This action will <span className="font-medium">close voting</span>.
+              Once revealed, no one will be able to submit votes.
             </p>
 
             <p className="mt-2 text-sm text-neutral-400">
-              Use this only when you&apos;re ready to show results (even if some people didn&apos;t
-              vote).
+              Use this only when you&apos;re ready to show results (even if some
+              people didn&apos;t vote).
             </p>
 
             <div className="mt-4 flex justify-end gap-2">
               <button
                 disabled={revealLoading}
                 onClick={() => setShowRevealConfirm(false)}
-                className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60"
+                className={`rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60 ${btnPress}`}
               >
                 Cancel
               </button>
@@ -875,10 +1027,78 @@ function clearAll() {
               <button
                 disabled={revealLoading}
                 onClick={revealNowConfirmed}
-                className="rounded-md bg-yellow-500 px-3 py-2 text-sm font-medium text-black hover:bg-yellow-400 disabled:opacity-60"
+                className={`rounded-md bg-yellow-500 px-3 py-2 text-sm font-medium text-black hover:bg-yellow-400 disabled:opacity-60 ${btnPress}`}
               >
                 {revealLoading ? "Revealing..." : "Yes, reveal & close voting"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 z-[60] w-[calc(100%-2rem)] max-w-md -translate-x-1/2">
+          <div
+            role="status"
+            aria-live="polite"
+            className={[
+              "relative overflow-hidden rounded-xl border shadow-2xl",
+              "backdrop-blur-md",
+              "px-4 py-3",
+              "transition-all duration-300 ease-out",
+              toast.kind === "err"
+                ? "border-red-500/40 bg-red-950/90 text-red-50"
+                : "border-yellow-500/30 bg-neutral-950/95 text-neutral-50",
+              toast.phase === "enter"
+                ? "opacity-0 translate-y-3 scale-[0.98]"
+                : toast.phase === "exit"
+                ? "opacity-0 translate-y-3 scale-[0.98]"
+                : "opacity-100 translate-y-0 scale-100",
+            ].join(" ")}
+          >
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5">
+                {toast.kind === "err" ? (
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-500/15 border border-red-500/30">
+                    ✕
+                  </span>
+                ) : (
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-100">
+                    ✓
+                  </span>
+                )}
+              </div>
+
+              <div className="flex-1">
+                <div className="text-sm font-medium leading-5">{toast.msg}</div>
+                <div className="mt-0.5 text-xs opacity-80">
+                  {toast.kind === "err" ? "Try again." : "Done."}
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setToast((t) => (t ? { ...t, phase: "exit" } : t));
+                  window.setTimeout(() => setToast(null), 280);
+                }}
+                className={`rounded-md px-2 py-1 text-xs opacity-80 hover:opacity-100 ${btnPress}`}
+                aria-label="Dismiss"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="absolute bottom-0 left-0 h-1 w-full bg-white/10">
+              <div
+                className={[
+                  "h-full origin-left",
+                  toast.kind === "err" ? "bg-red-400/70" : "bg-yellow-400/60",
+                  toast.phase === "shown" ? "scale-x-0" : "scale-x-100",
+                  "transition-transform ease-linear",
+                ].join(" ")}
+                style={{ transitionDuration: "1600ms" }}
+              />
             </div>
           </div>
         </div>
