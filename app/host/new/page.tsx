@@ -85,7 +85,7 @@ export default function HostNewPage() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm text-neutral-300">Max members (including you)</label>
+            <label className="text-sm text-neutral-300">Voting members (including you)</label>
             <input
               type="number"
               value={maxMembers}

@@ -62,6 +62,21 @@ export async function POST(
       return NextResponse.json({ error: "No valid categories selected" }, { status: 400 });
     }
 
+    // 3.5) Prevent changing setup if any ballots (votes) already exist for this group
+    const { data: existingBallots, error: ballotError } = await supabaseServer
+      .from("ballots")
+      .select("id")
+      .eq("group_id", group.id)
+      .limit(1);
+
+    if (ballotError) throw ballotError;
+    if (existingBallots && existingBallots.length > 0) {
+      return NextResponse.json(
+        { error: "Cannot change setup after votes have been cast" },
+        { status: 409 }
+      );
+    }
+
     // 4) Clear existing setup (MVP: overwrite)
     // nominees should cascade delete via FK from categories -> nominees
     const { error: delError } = await supabaseServer
@@ -117,6 +132,77 @@ export async function POST(
         nominees: nomineesToInsert.length,
       },
     });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function GET(
+  req: Request,
+  ctx: { params: Promise<{ code: string }> }
+) {
+  try {
+    const { code } = await ctx.params;
+
+    // find group
+    const { data: group, error: groupError } = await supabaseServer
+      .from("groups")
+      .select("id")
+      .eq("code", code)
+      .single();
+
+    if (groupError || !group) {
+      return NextResponse.json({ error: "Group not found" }, { status: 404 });
+    }
+
+    // load categories for this group
+    const { data: categories, error: catError } = await supabaseServer
+      .from("categories")
+      .select("name")
+      .eq("group_id", group.id)
+      .order("sort_order", { ascending: true });
+
+    if (catError) throw catError;
+
+    // map saved category names back to catalog keys when possible
+    const categoryKeys: string[] = (categories ?? [])
+      .map((c: { name: string }) => {
+        const found = OSCARS_CATALOG.find((cc) => cc.name === c.name);
+        return found ? found.key : null;
+      })
+      .filter(Boolean) as string[];
+
+    // Require admin token and host validation to read setup/lock status
+    const url = new URL(req.url);
+    const adminToken = url.searchParams.get("k");
+    if (!adminToken) {
+      return NextResponse.json({ error: "Missing admin token" }, { status: 401 });
+    }
+
+    const { data: adminInvite, error: adminError } = await supabaseServer
+      .from("invites")
+      .select("id, role")
+      .eq("group_id", group.id)
+      .eq("token", adminToken)
+      .single();
+
+    if (adminError || !adminInvite || adminInvite.role !== "host") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // check if ballots exist (locks setup)
+    const { data: existingBallots, error: ballotError } = await supabaseServer
+      .from("ballots")
+      .select("id")
+      .eq("group_id", group.id)
+      .limit(1);
+
+    if (ballotError) throw ballotError;
+
+    const hasVotes = !!(existingBallots && existingBallots.length > 0);
+
+    return NextResponse.json({ categoryKeys, hasVotes });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

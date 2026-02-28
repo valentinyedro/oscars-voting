@@ -16,7 +16,7 @@ export async function POST(
 
     const { data: group, error: groupError } = await supabaseServer
       .from("groups")
-      .select("id, reveal_at")
+      .select("id, reveal_at, max_members")
       .eq("code", code)
       .single();
 
@@ -37,6 +37,31 @@ export async function POST(
 
     if (group.reveal_at) {
       return NextResponse.json({ success: true, revealAt: group.reveal_at });
+    }
+
+    const maxMembers = group.max_members ?? 0;
+    const threshold = Math.ceil(maxMembers / 2);
+
+    if (maxMembers <= 0) {
+      return NextResponse.json({ error: "Invalid group maxMembers" }, { status: 400 });
+    }
+
+    // Count voted invites (used_at not null)
+    const { count: votedCount, error: votedErr } = await supabaseServer
+      .from("invites")
+      .select("id", { count: "exact", head: true })
+      .eq("group_id", group.id)
+      .not("used_at", "is", null);
+
+    if (votedErr) throw votedErr;
+
+    const voted = votedCount ?? 0;
+
+    if (voted < threshold) {
+      return NextResponse.json(
+        { error: `Reveal requires at least ${threshold} of ${maxMembers} votes.` },
+        { status: 403 }
+      );
     }
 
     const now = new Date().toISOString();

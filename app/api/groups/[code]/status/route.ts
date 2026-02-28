@@ -53,10 +53,16 @@ export async function GET(
 
     if (votedErr) throw votedErr;
 
+    const maxMembers = group.max_members ?? 0;
+    const voted = votedCount ?? 0;
+    const threshold = Math.ceil(maxMembers / 2);
+
+    const canReveal = !group.reveal_at && maxMembers > 0 && voted >= threshold;
+
     return NextResponse.json({
-      group: { title: group.title, revealAt: group.reveal_at, maxMembers: group.max_members },
-      counts: { totalInvites: totalInvites ?? 0, voted: votedCount ?? 0 },
-      canReveal: true,
+      group: { title: group.title, revealAt: group.reveal_at, maxMembers },
+      counts: { totalInvites: totalInvites ?? 0, voted },
+      canReveal,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

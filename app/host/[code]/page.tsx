@@ -32,6 +32,8 @@ type ResultsResponse =
     }
   | { error: string };
 
+  type StatusOk = Exclude<StatusResponse, { error: string }>;
+
 function hasError(x: unknown): x is { error: string } {
   return !!x && typeof x === "object" && "error" in x;
 }
@@ -53,7 +55,7 @@ export default function HostPanelPage() {
   });
 
   const [invites, setInvites] = useState<Invite[]>([]);
-  const [inviteCount, setInviteCount] = useState(1);
+  const [generatingInvites, setGeneratingInvites] = useState(false);
 
   // ---- Catalog-derived categories (stable order) ----
   const catalogCategories = useMemo(() => {
@@ -74,6 +76,7 @@ export default function HostPanelPage() {
   // UX default: all selected. (If you prefer none, replace with [])
   const [setupKeys, setSetupKeys] = useState<string[]>(() => allCategoryKeys);
   const [setupMsg, setSetupMsg] = useState<string | null>(null);
+  const [setupLocked, setSetupLocked] = useState<boolean>(false);
 
   // ---- Reveal/results state ----
   const [status, setStatus] = useState<StatusResponse | null>(null);
@@ -234,19 +237,59 @@ function clearAll() {
     setRenameMsg(null);
   }
 
-  async function generateInvites() {
-    await fetch(`/api/groups/${code}/invites?k=${adminToken}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ count: inviteCount }),
-    });
-    await loadInvites();
-    await loadStatus(); // refresca progreso
-  }
+  // Auto-generate missing invites to match group's maxMembers
+  useEffect(() => {
+    if (!code || !adminToken) return;
+    if (!status || hasError(status)) return;
+
+    // status is valid (not error) here
+    const statusOkLocal = status as StatusOk;
+    const max = statusOkLocal.group?.maxMembers ?? 0;
+    const current = invites.length;
+    const delta = max - current;
+    if (delta <= 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      setGeneratingInvites(true);
+      try {
+        await fetch(`/api/groups/${code}/invites?k=${adminToken}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ count: delta }),
+        });
+
+        if (cancelled) return;
+
+        // 1) primero traemos invites (esto ya refleja que están listos)
+        await loadInvites();
+
+        if (cancelled) return;
+
+        // 2) ocultar el bloque INMEDIATAMENTE
+        setGeneratingInvites(false);
+
+        // 3) refrescar status después (ya sin mostrar “generating”)
+        await loadStatus();
+      } catch {
+        if (!cancelled) setGeneratingInvites(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [code, adminToken, status, invites.length]);
 
   async function applySetup() {
     if (!adminToken) {
       alert("Missing admin token");
+      return;
+    }
+
+    if (setupLocked) {
+      setSetupMsg("Voting setup is locked — votes have already been cast.");
       return;
     }
 
@@ -360,6 +403,18 @@ function clearAll() {
         const j2 = (await r2.json()) as ResultsResponse;
         if (!cancelled) setResults(j2);
       }
+      // load persisted setup and whether it's locked by votes
+      try {
+        const sres = await fetch(`/api/groups/${code}/setup?k=${adminToken}`);
+        const sj = await sres.json();
+        if (!cancelled && sres.ok && sj?.categoryKeys) {
+          // only set keys if we got a valid array
+          setSetupKeys(sj.categoryKeys ?? allCategoryKeys);
+          setSetupLocked(!!sj.hasVotes);
+        }
+      } catch (e) {
+        // ignore
+      }
     })();
 
     return () => {
@@ -409,7 +464,15 @@ function clearAll() {
 
   const statusOk = status && !hasError(status) ? status : null;
   const resultsOk = results && !hasError(results) ? results : null;
+
   const isRevealed = !!statusOk?.group.revealAt;
+
+  const maxMembers = statusOk?.group.maxMembers ?? 0;
+  const threshold = Math.ceil(maxMembers / 2);
+  const voted = statusOk?.counts.voted ?? 0;
+
+  // source of truth from backend:
+  const canReveal = !!statusOk?.canReveal;
 
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100 p-6">
@@ -423,21 +486,28 @@ function clearAll() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-neutral-800 p-4 space-y-2">
-          <div>
-            Group code: <span className="font-mono">{code}</span>
-          </div>
-          <div>Admin token present? {adminToken ? "YES" : "NO"}</div>
+        <div className="rounded-xl border border-neutral-800 p-4 space-y-3">
+        <div className="font-medium">Admin access</div>
 
-          {adminToken && (
+        {!adminToken ? (
+          <div className="text-sm text-red-200">
+            Missing admin token. Open this page using your admin (host) link.
+          </div>
+        ) : (
+          <>
             <button
               onClick={copyAdminLink}
               className="inline-flex items-center justify-center rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
             >
-              Copy admin link
+              Copy host panel link
             </button>
-          )}
-        </div>
+
+            <div className="text-xs text-neutral-500">
+              Keep this link private. Anyone with it can modify your voting room (setup, invites, reveal).
+            </div>
+          </>
+        )}
+      </div>
 
         {/* Progress + Reveal + Results */}
         <div className="rounded-xl border border-neutral-800 p-4 space-y-3">
@@ -476,12 +546,13 @@ function clearAll() {
             </button>
 
             <button
+              disabled={!adminToken || isRevealed || revealLoading || !canReveal}
               onClick={() => {
-                if (!isRevealed) setShowRevealConfirm(true);
+                if (!isRevealed && canReveal) setShowRevealConfirm(true);
               }}
               className={[
-                "rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isRevealed
+                "rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60",
+                isRevealed || !canReveal
                   ? "bg-neutral-800 text-neutral-400"
                   : "bg-yellow-500 text-black hover:bg-yellow-400",
               ].join(" ")}
@@ -493,6 +564,23 @@ function clearAll() {
                 : "Reveal results"}
             </button>
           </div>
+          {adminToken && !isRevealed && statusOk && (
+              <div className="text-xs text-neutral-400">
+                Reveal requires ≥{" "}
+                <span className="font-mono">
+                  {threshold}/{maxMembers}
+                </span>{" "}
+                votes. Current:{" "}
+                <span className="font-mono">
+                  {voted}/{maxMembers}
+                </span>
+                {!canReveal && (
+                  <span className="ml-2 text-yellow-200">
+                    (Not ready)
+                  </span>
+                )}
+              </div>
+            )}
 
           {revealMsg && <div className="text-sm text-neutral-300">{revealMsg}</div>}
 
@@ -562,6 +650,7 @@ function clearAll() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={selectAll}
+              disabled={setupLocked}
               className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
             >
               Select All
@@ -569,6 +658,7 @@ function clearAll() {
 
             <button
               onClick={selectBig5}
+              disabled={setupLocked}
               className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
             >
               Big 5
@@ -576,6 +666,7 @@ function clearAll() {
 
             <button
               onClick={selectBig8}
+              disabled={setupLocked}
               className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
             >
               Big 8
@@ -583,6 +674,7 @@ function clearAll() {
 
             <button
               onClick={selectActingOnly}
+              disabled={setupLocked}
               className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
             >
               Acting Only
@@ -590,6 +682,7 @@ function clearAll() {
 
             <button
               onClick={selectAboveTheLine}
+              disabled={setupLocked}
               className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
             >
               Above the Line
@@ -597,6 +690,7 @@ function clearAll() {
 
             <button
               onClick={selectTechnicalAwards}
+              disabled={setupLocked}
               className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
             >
               Technical Awards
@@ -604,6 +698,7 @@ function clearAll() {
 
             <button
               onClick={clearAll}
+              disabled={setupLocked}
               className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700"
             >
               Clear
@@ -611,9 +706,10 @@ function clearAll() {
 
             <button
               onClick={applySetup}
-              className="rounded-md bg-yellow-500 px-3 py-2 text-sm font-medium text-black hover:bg-yellow-400"
+              disabled={setupLocked}
+              className="rounded-md bg-yellow-500 px-3 py-2 text-sm font-medium text-black hover:bg-yellow-400 disabled:opacity-60"
             >
-              Apply setup
+              {setupLocked ? "Setup locked" : "Apply setup"}
             </button>
           </div>
 
@@ -622,15 +718,26 @@ function clearAll() {
           <div className="grid gap-2 sm:grid-cols-2">
             {catalogCategories.map((cat) => {
               const checked = setupKeys.includes(cat.key);
+              const disabledClass = setupLocked ? "opacity-95" : "hover:bg-neutral-900";
+              const checkedClass = setupLocked && checked
+                ? "bg-yellow-500/10 text-yellow-200 border-yellow-500/30"
+                : "text-neutral-200";
               return (
                 <label
                   key={cat.key}
-                  className="flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-900"
+                  className={[
+                    "flex items-center gap-2 rounded-md border px-3 py-2 text-sm",
+                    "border-neutral-800 bg-neutral-950",
+                    checkedClass,
+                    disabledClass,
+                  ].join(" ")}
                 >
                   <input
                     type="checkbox"
                     checked={checked}
+                    disabled={setupLocked}
                     onChange={(e) => toggleKey(cat.key, e.target.checked)}
+                    className={`${setupLocked ? "opacity-60" : ""} ${setupLocked && checked ? "accent-yellow-500" : ""}`}
                   />
                   <span>{cat.name}</span>
                 </label>
@@ -638,29 +745,23 @@ function clearAll() {
             })}
           </div>
 
+          {setupLocked && (
+            <div className="text-sm text-yellow-200">Voting setup locked — votes have been cast.</div>
+          )}
+
           <div className="text-xs text-neutral-500">
-            Tip: Best Picture is first. Use “Clear” if you want a small ballot.
+            Tip: Smaller ballots increase completion rate. You can adjust the setup until the first ballot is submitted.
           </div>
         </div>
 
-        {/* Generate invites */}
-        <div className="rounded-xl border border-neutral-800 p-4 space-y-3">
-          <div className="flex gap-2">
-            <input
-              type="number"
-              value={inviteCount}
-              onChange={(e) => setInviteCount(Number(e.target.value))}
-              className="bg-neutral-900 border border-neutral-800 px-3 py-2 rounded-md w-24"
-              min={1}
-            />
-            <button
-              onClick={generateInvites}
-              className="bg-yellow-500 text-black px-4 py-2 rounded-md hover:bg-yellow-400"
-            >
-              Generate invites
-            </button>
+        {/* Generating invites (show only while generating) */}
+        {generatingInvites && (
+          <div className="rounded-xl border border-neutral-800 p-4">
+            <div className="text-sm text-neutral-300">
+              Generating invites…
+            </div>
           </div>
-        </div>
+)}
 
         {/* Invites list */}
         <div className="rounded-xl border border-neutral-800 p-4">
