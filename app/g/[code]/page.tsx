@@ -105,8 +105,13 @@ export default function GroupVotePage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center p-6">
-        Loading...
+      <main className="min-h-screen bg-neutral-950 text-neutral-100">
+        <div className="flex min-h-screen items-center justify-center px-6">
+          <div className="flex flex-col items-center gap-3 text-neutral-300">
+            <span className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-neutral-300/60 border-t-transparent" />
+            <div className="text-sm">Loading…</div>
+          </div>
+        </div>
       </main>
     );
   }
@@ -127,12 +132,16 @@ export default function GroupVotePage() {
 
   if (data.categories.length === 0) {
     return (
-      <main className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center p-6">
-        <div className="max-w-lg space-y-3">
-          <h1 className="text-2xl font-semibold">{data.group.title}</h1>
-          <p className="text-neutral-300">
-            Voting is not set up yet. Ask the host to select categories and nominees.
-          </p>
+      <main className="min-h-screen bg-neutral-950 text-neutral-100">
+        <div className="flex min-h-screen items-center justify-center px-6">
+          <div className="max-w-lg space-y-3 text-center">
+            <h1 className="text-2xl font-semibold">
+              {data.group.title}
+            </h1>
+            <p className="text-neutral-300">
+              Voting is not set up yet. Ask the host to select categories and nominees.
+            </p>
+          </div>
         </div>
       </main>
     );
@@ -185,22 +194,35 @@ export default function GroupVotePage() {
           <div key={cat.id} className="rounded-xl border border-neutral-800 p-4 space-y-3">
             <h2 className="text-lg font-medium">{cat.name}</h2>
 
-            <div className="space-y-2">
-              {cat.nominees.map((n) => (
-                <label
-                  key={n.id}
-                  className="flex items-center gap-3 rounded-md border border-neutral-800 bg-neutral-900/40 px-3 py-2 cursor-pointer hover:bg-neutral-900"
-                >
-                  <input
-                    type="radio"
-                    name={cat.id}
-                    value={n.id}
-                    checked={choices[cat.id] === n.id}
-                    onChange={() => setChoices((prev) => ({ ...prev, [cat.id]: n.id }))}
-                  />
-                  <span>{n.name}</span>
-                </label>
-              ))}
+           <div className="space-y-2">
+              {cat.nominees.map((n) => {
+                const checked = choices[cat.id] === n.id;
+
+                return (
+                  <label
+                    key={n.id}
+                    className={[
+                      "flex items-center gap-3 rounded-md border px-3 py-2 cursor-pointer transition-colors",
+                      "border-neutral-800 bg-neutral-900/40 hover:bg-neutral-900",
+                      checked
+                        ? "bg-yellow-500/10 border-yellow-500/40 text-yellow-100"
+                        : "text-neutral-200",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="radio"
+                      name={cat.id}
+                      value={n.id}
+                      checked={checked}
+                      onChange={() =>
+                        setChoices((prev) => ({ ...prev, [cat.id]: n.id }))
+                      }
+                      className="accent-yellow-500 focus:ring-yellow-500"
+                    />
+                    <span>{n.name}</span>
+                  </label>
+                );
+              })}
             </div>
           </div>
         ))}

@@ -24,10 +24,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+      <body className="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
+        <div className="relative min-h-screen flex flex-col overflow-hidden">
+          
+          {/* Top radial glow */}
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(234,179,8,0.15),transparent_60%)]" />
+          
+          {/* Bottom gold haze */}
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(234,179,8,0.08),transparent_40%)]" />
+
+          <div className="flex-1">
+            {children}
+          </div>
+        </div>
       </body>
     </html>
   );

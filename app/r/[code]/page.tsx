@@ -85,8 +85,13 @@ export default function PublicResultsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center p-6">
-        Loading...
+      <main className="min-h-screen bg-neutral-950 text-neutral-100">
+        <div className="flex min-h-screen items-center justify-center px-6">
+          <div className="flex flex-col items-center gap-3 text-neutral-300">
+            <span className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-neutral-300/60 border-t-transparent" />
+            <div className="text-sm">Loading…</div>
+          </div>
+        </div>
       </main>
     );
   }
@@ -177,10 +182,6 @@ export default function PublicResultsPage() {
             </div>
           );
         })}
-
-        <div className="pt-2 text-xs text-neutral-500">
-          Share link: <span className="font-mono">{shareUrl}</span>
-        </div>
       </div>
     </main>
   );

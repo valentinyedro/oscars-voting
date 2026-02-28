@@ -12,7 +12,7 @@ export default function HostNewPage() {
   const router = useRouter();
 
   const [title, setTitle] = useState("Oscars Night 2026");
-  const [hostName, setHostName] = useState("Valen");
+  const [hostName, setHostName] = useState("Host");
   const [maxMembers, setMaxMembers] = useState(5);
 
   const [loading, setLoading] = useState(false);
