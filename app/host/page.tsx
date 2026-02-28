@@ -243,7 +243,8 @@ export default function HostListPage() {
             {items.map((it) => {
               const revealed = !!it.revealAt;
               const voted = it.voted ?? 0;
-              const max = it.maxMembers ?? it.totalInvites ?? 0;
+              const max = it.maxMembers ?? 0;
+              const threshold = Math.ceil(max / 2);
 
               return (
                 <div
@@ -276,11 +277,23 @@ export default function HostListPage() {
                     </div>
 
                     <div className="mt-1 text-sm text-neutral-300">
-                      Progress:{" "}
-                      <span className="font-mono">
-                        {voted} / {max || "—"}
-                      </span>
-                    </div>
+                        Progress:{" "}
+                        <span className="font-mono">
+                            {voted} / {max || "—"}
+                        </span>
+
+                        {!revealed && max > 0 && !it.canReveal && (
+                            <span className="ml-2 text-xs text-neutral-400">
+                            (Need ≥ <span className="font-mono">{threshold}</span> to reveal)
+                            </span>
+                        )}
+
+                        {!revealed && max > 0 && it.canReveal && (
+                            <span className="ml-2 text-xs text-yellow-200">
+                            (Ready)
+                            </span>
+                        )}
+                        </div>
 
                     {/* lastOpenedAt intentionally hidden from list UI */}
 
