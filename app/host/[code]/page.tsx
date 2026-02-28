@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { OSCARS_CATALOG } from "@/lib//catalog";
 
 type Invite = {
@@ -366,6 +367,20 @@ function clearAll() {
     };
   }, [code, adminToken]);
 
+  useEffect(() => {
+    if (!code) return;
+    if (typeof window === "undefined") return;
+
+    try {
+      localStorage.setItem(
+        `oscarsVoting:hostMeta:${code}`,
+        JSON.stringify({ lastOpenedAt: Date.now() })
+      );
+    } catch {
+      // ignore
+    }
+  }, [code]);
+
   function copyLink(token: string) {
     const link = `${window.location.origin}/g/${code}?t=${token}`;
     navigator.clipboard.writeText(link);
@@ -399,7 +414,14 @@ function clearAll() {
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100 p-6">
       <div className="mx-auto w-full max-w-4xl space-y-6">
-        <h1 className="text-3xl font-semibold tracking-tight">Host panel</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-3xl font-semibold tracking-tight">Host panel</h1>
+          <div className="text-sm">
+            <Link href="/" className="underline hover:text-neutral-300">
+              Back
+            </Link>
+          </div>
+        </div>
 
         <div className="rounded-xl border border-neutral-800 p-4 space-y-2">
           <div>

@@ -22,10 +22,10 @@ export default function Home() {
           </Link>
 
           <Link
-            href="/g/demo"
+            href="/host"
             className="inline-flex items-center justify-center rounded-md border px-5 py-3 hover:bg-neutral-50"
           >
-            View demo (placeholder)
+            View my groups
           </Link>
         </div>
 
