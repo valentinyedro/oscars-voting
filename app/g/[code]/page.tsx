@@ -130,6 +130,31 @@ export default function GroupVotePage() {
     );
   }
 
+  if (data.group.revealAt && !data.alreadyVoted) {
+    return (
+      <main className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center p-6">
+        <div className="max-w-lg space-y-3 text-center">
+          <h1 className="text-2xl font-semibold">{data.group.title}</h1>
+
+          <p className="text-neutral-300">
+            {data.invite.displayName}, voting is closed. 🎬
+          </p>
+
+          <p className="text-neutral-400 text-sm">
+            The host already revealed the results.
+          </p>
+
+          <a
+            href={`/r/${data.group.code}`}
+            className="inline-flex items-center justify-center rounded-md bg-yellow-500 px-4 py-2 text-sm font-medium text-black hover:bg-yellow-400"
+          >
+            View results
+          </a>
+        </div>
+      </main>
+    );
+  }
+
   if (data.categories.length === 0) {
     return (
       <main className="min-h-screen bg-neutral-950 text-neutral-100">
