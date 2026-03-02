@@ -231,18 +231,20 @@ export default function HostListPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                reloadFromStorage();
-                // fetch statuses for whatever is currently in storage
-                // (refreshStatuses uses current state; give it a tick)
-                setTimeout(() => refreshStatuses(), 0);
-              }}
-              disabled={items === null || loadingStatus}
-              className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60"
-            >
-              {loadingStatus ? "Refreshing..." : "Refresh"}
-            </button>
+            {items !== null && items.length > 0 && (
+              <button
+                onClick={() => {
+                  reloadFromStorage();
+                  // fetch statuses for whatever is currently in storage
+                  // (refreshStatuses uses current state; give it a tick)
+                  setTimeout(() => refreshStatuses(), 0);
+                }}
+                disabled={loadingStatus}
+                className="rounded-md bg-neutral-800 px-3 py-2 text-sm hover:bg-neutral-700 disabled:opacity-60"
+              >
+                {loadingStatus ? "Refreshing..." : "Refresh"}
+              </button>
+            )}
 
             <Link
               href="/host/new"
