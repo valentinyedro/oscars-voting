@@ -77,6 +77,7 @@ export default function HostPanelPage() {
 
   // ---- General init  ----
   const [initialLoading, setInitialLoading] = useState(true);
+  const [howOpen, setHowOpen] = useState(true);
 
   // ---- Voting setup state ----
   const [setupKeys, setSetupKeys] = useState<string[]>(() => allCategoryKeys);
@@ -517,7 +518,6 @@ export default function HostPanelPage() {
         await navigator.share({
           title: "Oscars Voting",
           text: message,
-          url: link,
         });
         showToast("Invitation shared", "ok");
       } else {
@@ -595,6 +595,71 @@ export default function HostPanelPage() {
             <Link href="/" className="underline hover:text-neutral-300">
               Back
             </Link>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-neutral-800">
+          <button
+            type="button"
+            onClick={() => setHowOpen((v) => !v)}
+            className="w-full flex items-center justify-between gap-3 p-4 text-left"
+            aria-expanded={howOpen}
+          >
+            <div className="font-medium">How it works</div>
+
+            {/* Chevron */}
+            <svg
+              viewBox="0 0 20 20"
+              className={[
+                "h-5 w-5 text-neutral-400 transition-transform duration-200",
+                howOpen ? "rotate-180" : "rotate-0",
+              ].join(" ")}
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+
+          {/* Smooth content */}
+          <div
+            className={[
+              "overflow-hidden transition-all duration-300 ease-out",
+              howOpen ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0",
+            ].join(" ")}
+            style={{ willChange: "max-height, opacity" }}
+          >
+            <div className="overflow-hidden px-4 pb-4">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-lg border border-neutral-700/70 bg-transparent p-3">
+                  <div className="text-xs text-neutral-500">Step 1</div>
+                  <div className="text-sm text-neutral-200 font-medium">Set up categories</div>
+                  <div className="text-xs text-neutral-400 mt-1">
+                    Choose which awards appear on the ballot.
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-neutral-700/70 bg-transparent p-3">
+                  <div className="text-xs text-neutral-500">Step 2</div>
+                  <div className="text-sm text-neutral-200 font-medium">Share voting links</div>
+                  <div className="text-xs text-neutral-400 mt-1">
+                    Send the right link to the right person.
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-neutral-700/70 bg-transparent p-3">
+                  <div className="text-xs text-neutral-500">Step 3</div>
+                  <div className="text-sm text-neutral-200 font-medium">Reveal results</div>
+                  <div className="text-xs text-neutral-400 mt-1">
+                    Reveal once most people have voted.
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -974,17 +1039,10 @@ export default function HostPanelPage() {
                   ) : (
                   <div className="shrink-0 flex flex-col gap-2 sm:flex-row sm:items-center">
                     <button
-                      onClick={() => copyLink(invite.token)}
-                      className="text-sm bg-neutral-800 px-3 py-1 rounded hover:bg-neutral-700 transition-transform active:scale-95"
-                    >
-                      Copy link
-                    </button>
-
-                    <button
                       onClick={() => shareInvite(invite)}
                       className="text-sm bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-400 transition-transform active:scale-95"
                     >
-                      Share invitation
+                      Share voting link
                     </button>
                   </div>
                   )}
